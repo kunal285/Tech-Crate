@@ -1,0 +1,82 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+local.properties
+
+# Dependency Directories
+node_modules/
+**/node_modules/
+
+# Build Outputs & Bundles
+dist/
+**/dist/
+build/
+**/build/
+.vite/
+**/.vite/
+*.jsbundle
+android/app/src/main/assets/index.android.bundle
+android/app/src/main/assets/index.android.bundle.map
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs & Caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.metro-health-check*
+.eslintcache
+.cache/
+coverage/
+
+# Android
+.gradle/
+**/.gradle/
+.cxx/
+**/.cxx/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+.kotlin/
+**/.kotlin/
+
+# iOS & Xcode
+**/Pods/
+/vendor/bundle/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.xcuserstate
+**/.xcode.env.local
+
+# IDEs & OS System Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+*.hprof
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+

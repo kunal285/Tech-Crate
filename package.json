@@ -1,0 +1,15 @@
+{
+  "name": "projectkart-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ProjectKart — Full-Stack AI-Powered Student & Maker E-Commerce Platform",
+  "scripts": {
+    "start:backend": "npm --prefix backend start",
+    "dev:backend": "npm --prefix backend run dev",
+    "start:admin": "npm --prefix admin run dev",
+    "build:admin": "npm --prefix admin run build",
+    "start:mobile": "npm --prefix mobile start",
+    "start:mobile:8082": "npm --prefix mobile run start:8082",
+    "android:mobile": "npm --prefix mobile run android"
+  }
+}
