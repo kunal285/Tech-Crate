@@ -6,6 +6,7 @@ import {
   StatusBar,
   Animated,
   Dimensions,
+  Image,
 } from 'react-native';
 import {Package, Cpu, Sparkles} from 'lucide-react-native';
 import {Colors, Typography, Spacing} from '../../theme';
@@ -70,8 +71,12 @@ const SplashScreen = ({navigation}) => {
           styles.logoContainer,
           {opacity: fadeAnim, transform: [{scale: scaleAnim}]},
         ]}>
-        <View style={styles.logoIcon}>
-          <Package size={52} color="#FFFFFF" strokeWidth={2.2} />
+        <View style={styles.logoImageWrapper}>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logoImg}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.logoText}>Tech Crate</Text>
       </Animated.View>
@@ -150,22 +155,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xl,
   },
-  logoIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
-    backgroundColor: Colors.secondary,
+  logoImageWrapper: {
+    width: 110,
+    height: 110,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.base,
-    shadowColor: Colors.secondary,
+    shadowColor: Colors.primaryAccent || '#3B82F6',
     shadowOffset: {width: 0, height: 8},
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 12,
   },
-  logoIconText: {
-    fontSize: 48,
+  logoImg: {
+    width: 100,
+    height: 100,
   },
   logoText: {
     fontSize: Typography.fontSize['4xl'],

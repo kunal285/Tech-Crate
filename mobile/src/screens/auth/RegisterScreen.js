@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Zap, Phone, User, GraduationCap, Building2, BookOpen, Mail } from 'lucide-react-native';
@@ -68,9 +69,11 @@ const RegisterScreen = ({ navigation }) => {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoRow}>
-              <View style={styles.logoIcon}>
-                <Zap size={22} color="#FFFFFF" />
-              </View>
+              <Image
+                source={require('../../assets/images/logo.png')}
+                style={{ width: 44, height: 44, marginRight: 10 }}
+                resizeMode="contain"
+              />
               <Text style={styles.logoText}>Tech Crate</Text>
             </View>
             <Text style={styles.titleText}>Create Account</Text>

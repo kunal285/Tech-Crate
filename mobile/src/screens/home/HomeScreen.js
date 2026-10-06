@@ -8,6 +8,7 @@ import {
   ScrollView,
   StatusBar,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -225,9 +226,11 @@ const HomeScreen = ({ navigation }) => {
       {/* Top App Bar */}
       <View style={styles.appBar}>
         <View style={styles.appBarLeft}>
-          <View style={styles.logoMini}>
-            <Zap size={18} color="#FFFFFF" />
-          </View>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={{ width: 36, height: 36, marginRight: 10 }}
+            resizeMode="contain"
+          />
           <View>
             <Text style={styles.greeting}>
               Good {getGreeting()}, {user?.name?.split(' ')[0] || 'Maker'}!

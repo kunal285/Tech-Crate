@@ -34,10 +34,10 @@ export default function LoginPage() {
         <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white mb-4 shadow-lg shadow-cyan-500/30">
-            <Zap className="w-8 h-8" />
+          <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center p-2 mb-3 border border-slate-700 shadow-lg shadow-cyan-500/10">
+            <img src="/logo.png" alt="Tech Crate Logo" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">ProjectKart Admin</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Tech Crate Admin</h1>
           <p className="text-sm text-slate-400 mt-1">Production-Grade Security Console</p>
         </div>
 

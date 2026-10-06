@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Zap, Phone, Lock, ArrowRight, RefreshCw, GraduationCap, UserCheck, ShieldCheck } from 'lucide-react-native';
@@ -152,9 +153,11 @@ const LoginScreen = ({ navigation }) => {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoRow}>
-              <View style={styles.logoIcon}>
-                <Zap size={22} color="#FFFFFF" />
-              </View>
+              <Image
+                source={require('../../assets/images/logo.png')}
+                style={{ width: 44, height: 44, marginRight: 10 }}
+                resizeMode="contain"
+              />
               <Text style={styles.logoText}>Tech Crate</Text>
             </View>
             <Text style={styles.welcomeText}>Welcome Back</Text>
