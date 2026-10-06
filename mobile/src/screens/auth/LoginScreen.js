@@ -18,15 +18,19 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import useAuthStore from '../../store/authStore';
 
+import firebaseAuthService from '../../services/firebaseAuthService';
+
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [requestId, setRequestId] = useState('');
+  const [firebaseSessionInfo, setFirebaseSessionInfo] = useState('');
+  const [authMode, setAuthMode] = useState('firebase'); // 'firebase' or 'direct'
   const [maskedPhone, setMaskedPhone] = useState('');
   const [step, setStep] = useState(1); // 1: Send Phone, 2: Enter OTP
   const [accountType, setAccountType] = useState('customer'); // 'customer' or 'student'
   
-  // Student Additional Details (for new student activation)
+  // Student Additional Details (for student activation)
   const [name, setName] = useState('');
   const [college, setCollege] = useState('');
   const [branch, setBranch] = useState('');
@@ -37,7 +41,7 @@ const LoginScreen = ({ navigation }) => {
   const [cooldownTimer, setCooldownTimer] = useState(0); // 30 seconds resend cooldown
   const [errors, setErrors] = useState({});
 
-  const { sendOtp, verifyOtp, isLoading, error, clearError } = useAuthStore();
+  const { sendOtp, verifyOtp, firebaseLogin, isLoading, error, clearError } = useAuthStore();
 
   // 5-Minute OTP Expiry Countdown
   useEffect(() => {
@@ -85,29 +89,59 @@ const LoginScreen = ({ navigation }) => {
     clearError();
     if (!validatePhone()) return;
 
-    const result = await sendOtp(phone);
-    if (result.success) {
-      setRequestId(result.data.requestId);
-      setMaskedPhone(result.data.maskedPhone || `+91 ******${phone.slice(-4)}`);
-      setStep(2);
-      setOtpTimer(300); // Reset 5 min timer
-      setCooldownTimer(30); // 30s cooldown
+    // Check if Firebase Client Credentials are ready
+    if (firebaseAuthService.isFirebaseConfigured()) {
+      setAuthMode('firebase');
+      const result = await firebaseAuthService.sendPhoneOtp(phone);
+      if (result.success) {
+        setFirebaseSessionInfo(result.sessionInfo);
+        setMaskedPhone(result.maskedPhone || `+91 ******${phone.slice(-4)}`);
+        setStep(2);
+        setOtpTimer(300);
+        setCooldownTimer(30);
+      } else {
+        Alert.alert('Firebase Phone Auth', result.message);
+      }
     } else {
-      Alert.alert('OTP Request', result.message);
+      // Direct SMS Provider Route
+      setAuthMode('direct');
+      const result = await sendOtp(phone);
+      if (result.success) {
+        setRequestId(result.data.requestId);
+        setMaskedPhone(result.data.maskedPhone || `+91 ******${phone.slice(-4)}`);
+        setStep(2);
+        setOtpTimer(300);
+        setCooldownTimer(30);
+      } else {
+        Alert.alert('Phone Authentication', result.message);
+      }
     }
   };
 
   const handleResendOtp = async () => {
     if (cooldownTimer > 0) return;
     clearError();
-    const result = await sendOtp(phone);
-    if (result.success) {
-      setRequestId(result.data.requestId);
-      setOtpTimer(300);
-      setCooldownTimer(30);
-      Alert.alert('OTP Resent', 'A new 6-digit code has been sent to your mobile number.');
+
+    if (authMode === 'firebase') {
+      const result = await firebaseAuthService.sendPhoneOtp(phone);
+      if (result.success) {
+        setFirebaseSessionInfo(result.sessionInfo);
+        setOtpTimer(300);
+        setCooldownTimer(30);
+        Alert.alert('OTP Resent', 'A new verification code has been dispatched to your mobile number.');
+      } else {
+        Alert.alert('Resend Failed', result.message);
+      }
     } else {
-      Alert.alert('Resend Failed', result.message);
+      const result = await sendOtp(phone);
+      if (result.success) {
+        setRequestId(result.data.requestId);
+        setOtpTimer(300);
+        setCooldownTimer(30);
+        Alert.alert('OTP Resent', 'A new verification code has been sent to your mobile number.');
+      } else {
+        Alert.alert('Resend Failed', result.message);
+      }
     }
   };
 
@@ -119,23 +153,51 @@ const LoginScreen = ({ navigation }) => {
     }
 
     if (otpTimer === 0) {
-      Alert.alert('OTP Expired', 'Your OTP has expired. Please request a new code.');
+      Alert.alert('OTP Expired', 'Your verification code has expired. Please request a new code.');
       return;
     }
 
-    const result = await verifyOtp({
-      phoneNumber: phone,
-      otp,
-      requestId,
-      accountType,
-      name: name.trim(),
-      college: college.trim(),
-      branch: branch.trim(),
-      studentId: studentId.trim(),
-    });
+    if (authMode === 'firebase') {
+      // 1. Verify code with Firebase and retrieve Firebase ID Token
+      const fbResult = await firebaseAuthService.verifyOtpAndGetIdToken(
+        firebaseSessionInfo,
+        otp
+      );
 
-    if (!result.success) {
-      Alert.alert('Verification Failed', result.message);
+      if (!fbResult.success) {
+        Alert.alert('Verification Failed', fbResult.message);
+        return;
+      }
+
+      // 2. Exchange verified Firebase ID token for secure ProjectKart application session
+      const loginResult = await firebaseLogin({
+        idToken: fbResult.idToken,
+        accountType,
+        name: name.trim(),
+        college: college.trim(),
+        branch: branch.trim(),
+        studentId: studentId.trim(),
+      });
+
+      if (!loginResult.success) {
+        Alert.alert('Authentication Failed', loginResult.message);
+      }
+    } else {
+      // Direct verification fallback
+      const result = await verifyOtp({
+        phoneNumber: phone,
+        otp,
+        requestId,
+        accountType,
+        name: name.trim(),
+        college: college.trim(),
+        branch: branch.trim(),
+        studentId: studentId.trim(),
+      });
+
+      if (!result.success) {
+        Alert.alert('Verification Failed', result.message);
+      }
     }
   };
 

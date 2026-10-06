@@ -33,6 +33,42 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
+  // Firebase Phone Auth Login
+  firebaseLogin: async authPayload => {
+    set({isLoading: true, error: null});
+    const result = await authService.firebaseLogin(authPayload);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      set({
+        user: userObj,
+        token: result.data.token,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } else {
+      set({error: result.message, isLoading: false});
+    }
+    return result;
+  },
+
+  // Firebase Phone Auth Register
+  firebaseRegister: async registerPayload => {
+    set({isLoading: true, error: null});
+    const result = await authService.firebaseRegister(registerPayload);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      set({
+        user: userObj,
+        token: result.data.token,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } else {
+      set({error: result.message, isLoading: false});
+    }
+    return result;
+  },
+
   // Send OTP
   sendOtp: async phoneNumber => {
     set({isLoading: true, error: null});

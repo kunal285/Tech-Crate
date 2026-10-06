@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "645024882086",
+    "project_id": "techcrate-2e07a",
+    "storage_bucket": "techcrate-2e07a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:645024882086:android:999ce114bcd742cf114367",
+        "android_client_info": {
+          "package_name": "com.techcrate.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQSTtfF5V4jjIL1og2X8MS6q05fGOfoIA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

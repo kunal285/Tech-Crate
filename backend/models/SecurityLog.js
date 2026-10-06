@@ -17,6 +17,8 @@ const securityLogSchema = new mongoose.Schema(
         'OTP_SENT',
         'CUSTOMER_LOGIN',
         'STUDENT_LOGIN',
+        'FIREBASE_AUTH_SUCCESS',
+        'FIREBASE_AUTH_FAILED',
         'PASSWORD_RESET_REQUESTED',
         'PASSWORD_RESET_COMPLETED',
         'PASSWORD_CHANGED',

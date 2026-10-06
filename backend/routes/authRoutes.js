@@ -24,6 +24,10 @@ const {
   verifyOtp,
   resendOtp,
 } = require('../controllers/otpAuthController');
+const {
+  firebaseLogin,
+  firebaseRegister,
+} = require('../controllers/firebaseAuthController');
 const { protect, optionalProtect } = require('../middleware/authMiddleware');
 const {
   authLimiter,
@@ -37,7 +41,11 @@ const {
   validatePasswordResetInput,
 } = require('../middleware/validationMiddleware');
 
-// Customer & Student Passwordless OTP Authentication Endpoints
+// Customer & Student Firebase Phone Authentication Endpoints
+router.post('/firebase-login', authLimiter, firebaseLogin);
+router.post('/firebase-register', authLimiter, firebaseRegister);
+
+// Customer & Student Passwordless OTP Authentication Endpoints (Direct SMS)
 router.post('/send-otp', otpLimiter, sendOtp);
 router.post('/verify-otp', authLimiter, verifyOtp);
 router.post('/resend-otp', otpLimiter, resendOtp);

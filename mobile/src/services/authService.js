@@ -3,12 +3,40 @@ import {apiPost, apiGet, apiPut} from './api';
 import {STORAGE_KEYS} from '../constants';
 
 const authService = {
-  // Send 6-Digit SMS OTP to Mobile Number
+  // Firebase Phone Auth - Exchange Verified ID Token for Backend Session
+  firebaseLogin: async authPayload => {
+    const result = await apiPost('/auth/firebase-login', authPayload);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      await authService.persistSession(
+        result.data.token,
+        userObj,
+        result.data.refreshToken
+      );
+    }
+    return result;
+  },
+
+  // Firebase Phone Auth - Register with Verified ID Token
+  firebaseRegister: async registerPayload => {
+    const result = await apiPost('/auth/firebase-register', registerPayload);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      await authService.persistSession(
+        result.data.token,
+        userObj,
+        result.data.refreshToken
+      );
+    }
+    return result;
+  },
+
+  // Send 6-Digit SMS OTP to Mobile Number (Direct SMS fallback)
   sendOtp: async phoneNumber => {
     return await apiPost('/auth/send-otp', {phoneNumber});
   },
 
-  // Verify 6-Digit OTP & Initialize Session
+  // Verify 6-Digit OTP & Initialize Session (Direct SMS fallback)
   verifyOtp: async otpData => {
     const result = await apiPost('/auth/verify-otp', otpData);
     if (result.success && result.data?.token) {

@@ -23,6 +23,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    firebaseUid: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
     password: {
       type: String,
       required: false, // Optional for OTP Customers & Students; required for Admin
