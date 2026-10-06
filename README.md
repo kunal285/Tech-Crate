@@ -1,97 +1,116 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# 🛒 ProjectKart - E-Commerce & Student Project Portal
 
-# Getting Started
+Welcome to **ProjectKart**, a full-stack e-commerce and student project ecosystem featuring a **Node.js/Express REST API**, a modern **React + Vite Admin Dashboard**, and a **React Native Mobile App** specifically built for **Customers and Students**.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+---
 
-## Step 1: Start Metro
+## 🔐 Passwordless SMS OTP Authentication
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+ProjectKart features a **Production-Grade Passwordless SMS OTP System** tailored exclusively for **Customers** and **Students**.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+### 🌟 Key Features
+- **Mobile-First Passwordless Login:** Customers and Students log in using `+91 Mobile Number` + `6-Digit SMS OTP` (No passwords required).
+- **Strict Admin Isolation:** Admin authentication remains completely separate at `/admin/login`. Admin accounts cannot authenticate via the Customer/Student OTP flow, and privilege escalation is blocked server-side.
+- **Cryptographic Security:** 6-digit PINs generated via `crypto.randomInt` and stored strictly as SHA-256 hashes in MongoDB.
+- **5-Minute Expiration & Single-Use:** OTP challenges expire after 5 minutes and are automatically pruned via MongoDB TTL indexes. Challenges are marked `used` immediately upon verification or reaching 5 failed attempts.
+- **Rate Limiting & Cooldowns:** Enforces a 30-second resend cooldown timer and a 5-attempt limit to protect against brute-force attacks and SMS flooding.
+- **Account Enumeration Protection:** Generic non-revealing messages (*"If this mobile number is valid, an OTP has been sent."*).
 
-```sh
-# Using npm
-npm start
+---
 
-# OR using Yarn
-yarn start
+## 🏗️ Repository Architecture
+
+```text
+ProjectKart/
+├── backend/                  # Node.js + Express REST API Server
+│   ├── controllers/          # Request handlers (auth, otp, products, orders, admin)
+│   ├── middleware/           # Security middleware (WAF, rate limiting, JWT auth)
+│   ├── models/               # MongoDB Mongoose schemas (User, OtpChallenge, Product, Order)
+│   ├── routes/               # API route definitions (/api/auth, /api/products, etc.)
+│   └── services/             # Transactional SMS service & business logic
+├── admin/                    # React + Vite Web Management Panel (Admins)
+│   ├── src/components/       # UI Components & Dashboard Widgets
+│   ├── src/pages/            # Admin Pages (Product Management, Orders, Users, Analytics)
+│   └── vite.config.js        # Vite config with vendor chunk optimization
+└── mobile/                   # React Native Application (Customers & Students)
+    ├── src/screens/          # App screens (LoginScreen, RegisterScreen, Home, Cart, Orders)
+    ├── src/services/         # API Service client & authService
+    └── src/store/            # State management (Zustand authStore)
 ```
 
-## Step 2: Build and run your app
+---
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## ⚡ Quick Start & Setup
 
-### Android
+### Prerequisites
+- **Node.js**: v18+ or v20+
+- **MongoDB**: Local instance or MongoDB Atlas Connection URI
+- **React Native SDK**: Android Studio / Xcode configured for mobile app execution
 
-```sh
-# Using npm
+---
+
+### 1. Backend API Setup
+
+```bash
+cd backend
+npm install
+```
+
+Configure `backend/.env`:
+```env
+PORT=5000
+NODE_ENV=development
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/projectkart
+JWT_SECRET=your_super_secret_jwt_key
+SMS_PROVIDER_API_KEY=your_sms_api_key
+SMS_PROVIDER_SECRET=your_sms_secret
+SMS_SENDER_ID=PRJKRT
+```
+
+Start backend development server:
+```bash
+npm run dev
+```
+
+---
+
+### 2. Admin Web Panel Setup
+
+```bash
+cd admin
+npm install
+npm run dev
+```
+The Admin Panel will open at `http://localhost:3000`.
+
+---
+
+### 3. Mobile App Setup (Customers & Students)
+
+```bash
+cd mobile
+npm install
+```
+
+Run on Android device or emulator:
+```bash
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### iOS
+---
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## 🛡️ Security Audit & Safeguards
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+| Component | Security Safeguard |
+| :--- | :--- |
+| **Authentication** | Dual authentication system: Passwordless OTP for Customers/Students; Dedicated credential portal for Admins. |
+| **Data Protection** | Sensitive tokens & OTP hashes are never stored in plaintext. |
+| **Header Security** | Protection against XSS, clickjacking, and MIME-sniffing via `helmet`, `xss-clean`, and `express-mongo-sanitize`. |
+| **Session Control** | Short-lived JWT access tokens paired with HttpOnly, SameSite refresh cookies. |
+| **WAF & Rate Limits** | Request rate-limiting via `express-rate-limit` on all public endpoints. |
 
-```sh
-bundle install
-```
+---
 
-Then, and every time you update your native dependencies, run:
+## 📜 License & Credits
 
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Built with ❤️ for ProjectKart. All rights reserved.
