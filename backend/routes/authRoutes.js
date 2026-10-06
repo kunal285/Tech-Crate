@@ -1,16 +1,59 @@
 const express = require('express');
 const router = express.Router();
 const {
-  loginUser,
   registerUser,
+  verifyEmail,
+  resendVerificationEmail,
+  loginUser,
+  refreshAccessToken,
+  logoutUser,
+  forgotPassword,
+  resetPassword,
   getUserProfile,
   updateUserProfile,
+  generate2FA,
+  verifyAndEnable2FA,
+  disable2FA,
+  getActiveSessions,
+  revokeSession,
+  revokeAllSessions,
+  getSecurityLogs,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
+const {
+  authLimiter,
+  passwordResetLimiter,
+  verificationLimiter,
+} = require('../middleware/rateLimiter');
+const {
+  validateRegistrationInput,
+  validateLoginInput,
+  validatePasswordResetInput,
+} = require('../middleware/validationMiddleware');
 
-router.post('/login', loginUser);
-router.post('/register', registerUser);
+// Public Authentication Endpoints (Rate Limited & Validated)
+router.post('/register', authLimiter, validateRegistrationInput, registerUser);
+router.post('/verify-email', verificationLimiter, verifyEmail);
+router.post('/resend-verification', verificationLimiter, resendVerificationEmail);
+router.post('/login', authLimiter, validateLoginInput, loginUser);
+router.post('/refresh-token', refreshAccessToken);
+router.post('/forgot-password', passwordResetLimiter, forgotPassword);
+router.post('/reset-password', passwordResetLimiter, validatePasswordResetInput, resetPassword);
+
+// Protected Authentication & Profile Endpoints
+router.post('/logout', protect, logoutUser);
 router.get('/profile', protect, getUserProfile);
 router.put('/profile', protect, updateUserProfile);
+
+// 2FA Management Endpoints
+router.post('/2fa/generate', protect, generate2FA);
+router.post('/2fa/verify', protect, verifyAndEnable2FA);
+router.post('/2fa/disable', protect, disable2FA);
+
+// Session Security & Security Audit Logs Endpoints
+router.get('/security/sessions', protect, getActiveSessions);
+router.delete('/security/sessions/:id', protect, revokeSession);
+router.post('/security/sessions/revoke-all', protect, revokeAllSessions);
+router.get('/security/logs', protect, getSecurityLogs);
 
 module.exports = router;

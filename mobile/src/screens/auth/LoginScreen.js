@@ -9,24 +9,25 @@ import {
   Platform,
   Alert,
   StatusBar,
-  Dimensions,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import { Zap, Mail, Lock, Eye, EyeOff, Search, Store } from 'lucide-react-native';
+import { Zap, Mail, Lock, Eye, EyeOff, Search, Store, KeyRound } from 'lucide-react-native';
 import {Colors, Typography, Spacing, BorderRadius, Shadows} from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import useAuthStore from '../../store/authStore';
 
-const {height} = Dimensions.get('window');
-
 const LoginScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [require2FA, setRequire2FA] = useState(false);
+  const [useRecovery, setUseRecovery] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const {login, isLoading, error, clearError} = useAuthStore();
+  const {login, isLoading, clearError} = useAuthStore();
 
   const validate = () => {
     const newErrors = {};
@@ -34,18 +35,28 @@ const LoginScreen = ({navigation}) => {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       newErrors.email = 'Enter a valid email address';
     if (!password) newErrors.password = 'Password is required';
-    else if (password.length < 6)
-      newErrors.password = 'Password must be at least 6 characters';
+    else if (password.length < 8)
+      newErrors.password = 'Password must be at least 8 characters';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleLogin = async () => {
     clearError();
-    if (!validate()) return;
-    const result = await login({email: email.trim().toLowerCase(), password});
+    if (!require2FA && !validate()) return;
+    const result = await login({
+      email: email.trim().toLowerCase(),
+      password,
+      totpCode: useRecovery ? undefined : totpCode,
+      recoveryCode: useRecovery ? recoveryCode : undefined,
+    });
+
     if (!result.success) {
-      Alert.alert('Login Failed', result.message);
+      if (result.data?.require2FA) {
+        setRequire2FA(true);
+      } else {
+        Alert.alert('Authentication Failed', result.message || 'Invalid email or password.');
+      }
     }
   };
 
@@ -76,40 +87,80 @@ const LoginScreen = ({navigation}) => {
 
           {/* Form */}
           <View style={styles.form}>
-            <Input
-              label="Email Address"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              error={errors.email}
-              leftIcon={<Mail size={18} color={Colors.textMuted} />}
-            />
+            {!require2FA ? (
+              <>
+                <Input
+                  label="Email Address"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  error={errors.email}
+                  leftIcon={<Mail size={18} color={Colors.textMuted} />}
+                />
 
-            <Input
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              secureTextEntry={!showPassword}
-              error={errors.password}
-              leftIcon={<Lock size={18} color={Colors.textMuted} />}
-              rightIcon={
-                showPassword ? <EyeOff size={18} color={Colors.textMuted} /> : <Eye size={18} color={Colors.textMuted} />
-              }
-              onRightIconPress={() => setShowPassword(!showPassword)}
-            />
+                <Input
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
+                  secureTextEntry={!showPassword}
+                  error={errors.password}
+                  leftIcon={<Lock size={18} color={Colors.textMuted} />}
+                  rightIcon={
+                    showPassword ? <EyeOff size={18} color={Colors.textMuted} /> : <Eye size={18} color={Colors.textMuted} />
+                  }
+                  onRightIconPress={() => setShowPassword(!showPassword)}
+                />
 
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
-              style={styles.forgotBtn}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('ForgotPassword')}
+                  style={styles.forgotBtn}>
+                  <Text style={styles.forgotText}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.mfaBox}>
+                <View style={styles.mfaHeader}>
+                  <KeyRound size={20} color={Colors.primary} />
+                  <Text style={styles.mfaTitle}>Two-Factor Authentication Required</Text>
+                </View>
+
+                {!useRecovery ? (
+                  <Input
+                    label="6-Digit Authenticator Code"
+                    value={totpCode}
+                    onChangeText={v => setTotpCode(v.replace(/\D/g, ''))}
+                    placeholder="000000"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    leftIcon={<Lock size={18} color={Colors.primary} />}
+                  />
+                ) : (
+                  <Input
+                    label="Backup Recovery Code"
+                    value={recoveryCode}
+                    onChangeText={v => setRecoveryCode(v.toUpperCase())}
+                    placeholder="XXXXXXXX"
+                    autoCapitalize="characters"
+                    leftIcon={<Lock size={18} color={Colors.primary} />}
+                  />
+                )}
+
+                <TouchableOpacity
+                  onPress={() => setUseRecovery(!useRecovery)}
+                  style={{ marginBottom: 16 }}>
+                  <Text style={styles.mfaToggleText}>
+                    {useRecovery ? 'Use Authenticator App' : 'Use Recovery Code'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <Button
-              title="Sign In"
+              title={require2FA ? 'Verify 2FA' : 'Sign In'}
               onPress={handleLogin}
               loading={isLoading}
               fullWidth
@@ -168,8 +219,8 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: Spacing['2xl'],
-    paddingBottom: Spacing['2xl'],
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xl,
   },
   logoRow: {
     flexDirection: 'row',
@@ -206,7 +257,6 @@ const styles = StyleSheet.create({
   form: {
     marginTop: Spacing.sm,
   },
-  inputIcon: {fontSize: 18},
   forgotBtn: {
     alignSelf: 'flex-end',
     marginTop: -Spacing.sm,
@@ -219,6 +269,30 @@ const styles = StyleSheet.create({
   },
   loginBtn: {
     marginTop: Spacing.sm,
+  },
+  mfaBox: {
+    backgroundColor: Colors.primary + '08',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+    marginBottom: 16,
+  },
+  mfaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  mfaTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  mfaToggleText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   divider: {
     flexDirection: 'row',
@@ -247,7 +321,6 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
     backgroundColor: Colors.white,
   },
-  googleIcon: {fontSize: 20},
   googleText: {
     fontSize: Typography.fontSize.base,
     fontWeight: Typography.fontWeight.semibold,
@@ -257,7 +330,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Spacing['2xl'],
+    marginTop: Spacing.xl,
   },
   registerText: {
     fontSize: Typography.fontSize.base,

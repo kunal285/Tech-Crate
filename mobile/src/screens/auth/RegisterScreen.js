@@ -11,10 +11,24 @@ import {
   StatusBar,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {Colors, Typography, Spacing, BorderRadius} from '../../theme';
+import {Colors, Typography, Spacing} from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import useAuthStore from '../../store/authStore';
+
+const getPasswordStrength = (pass) => {
+  if (!pass) return { score: 0, label: '', color: '#CBD5E1' };
+  let score = 0;
+  if (pass.length >= 8) score += 25;
+  if (/[A-Z]/.test(pass)) score += 25;
+  if (/[a-z]/.test(pass)) score += 25;
+  if (/[0-9]/.test(pass) && /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)) score += 25;
+
+  if (score <= 25) return { score: 25, label: 'Weak (min 8 chars, A-Z, 0-9, special char)', color: '#EF4444' };
+  if (score <= 50) return { score: 50, label: 'Fair', color: '#F59E0B' };
+  if (score <= 75) return { score: 75, label: 'Good', color: '#3B82F6' };
+  return { score: 100, label: 'Strong', color: '#10B981' };
+};
 
 const RegisterScreen = ({navigation}) => {
   const [form, setForm] = useState({
@@ -46,8 +60,8 @@ const RegisterScreen = ({navigation}) => {
       newErrors.password = 'Password is required';
     else if (form.password.length < 8)
       newErrors.password = 'Password must be at least 8 characters';
-    else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(form.password))
-      newErrors.password = 'Password must contain uppercase, lowercase and a number';
+    else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(form.password))
+      newErrors.password = 'Must contain uppercase, lowercase, number & special character';
     if (form.password !== form.confirmPassword)
       newErrors.confirmPassword = 'Passwords do not match';
     setErrors(newErrors);
@@ -65,9 +79,14 @@ const RegisterScreen = ({navigation}) => {
       role: 'customer',
     });
     if (!result.success) {
-      Alert.alert('Registration Failed', result.message);
+      Alert.alert('Registration Status', result.message);
+    } else {
+      Alert.alert('Registration Successful', result.message || 'Please check your email for verification link.');
+      navigation.navigate('Login');
     }
   };
+
+  const strength = getPasswordStrength(form.password);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -131,7 +150,7 @@ const RegisterScreen = ({navigation}) => {
               label="Password"
               value={form.password}
               onChangeText={v => updateForm('password', v)}
-              placeholder="Min. 8 characters"
+              placeholder="Min. 8 chars (A-Z, a-z, 0-9, @#$)"
               secureTextEntry={!showPassword}
               error={errors.password}
               required
@@ -139,6 +158,19 @@ const RegisterScreen = ({navigation}) => {
               rightIcon={<Text style={styles.icon}>{showPassword ? '👁️' : '🙈'}</Text>}
               onRightIconPress={() => setShowPassword(!showPassword)}
             />
+
+            {/* Password Strength Indicator */}
+            {form.password.length > 0 && (
+              <View style={styles.strengthContainer}>
+                <View style={styles.strengthBarBg}>
+                  <View style={[styles.strengthBarFill, { width: `${strength.score}%`, backgroundColor: strength.color }]} />
+                </View>
+                <Text style={[styles.strengthText, { color: strength.color }]}>
+                  Password Strength: {strength.label}
+                </Text>
+              </View>
+            )}
+
             <Input
               label="Confirm Password"
               value={form.confirmPassword}
@@ -217,6 +249,10 @@ const styles = StyleSheet.create({
   },
   form: {marginTop: Spacing.sm},
   icon: {fontSize: 18},
+  strengthContainer: {marginTop: -8, marginBottom: 12},
+  strengthBarBg: {height: 4, borderRadius: 2, backgroundColor: '#E2E8F0', overflow: 'hidden'},
+  strengthBarFill: {height: '100%'},
+  strengthText: {fontSize: 11, fontWeight: '600', marginTop: 4},
   termsText: {
     fontSize: Typography.fontSize.xs,
     color: Colors.textMuted,
