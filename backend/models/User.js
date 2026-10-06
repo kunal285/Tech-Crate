@@ -11,29 +11,31 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: [true, 'Please provide an email'],
-      unique: true,
+      required: false,
       lowercase: true,
+      trim: true,
+      index: true,
+      sparse: true,
+    },
+    phone: {
+      type: String,
+      required: [true, 'Please provide a mobile number'],
       trim: true,
       index: true,
     },
     password: {
       type: String,
-      required: [true, 'Please provide a password'],
+      required: false, // Optional for OTP Customers & Students; required for Admin
       select: false,
     },
     role: {
       type: String,
-      enum: ['customer', 'seller', 'admin'],
+      enum: ['customer', 'student', 'seller', 'admin'],
       default: 'customer',
     },
     avatar: {
       type: String,
       default: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80',
-    },
-    phone: {
-      type: String,
-      default: '',
     },
     address: {
       street: String,
@@ -42,6 +44,7 @@ const userSchema = new mongoose.Schema(
       pincode: String,
       country: { type: String, default: 'India' },
     },
+    // Student & Academic Details
     college: {
       type: String,
       default: '',
@@ -50,11 +53,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    studentId: {
+      type: String,
+      default: '',
+    },
     isVerifiedSeller: {
       type: Boolean,
       default: false,
     },
-    // Account Security Fields
+    // Verification & Security
+    isPhoneVerified: {
+      type: Boolean,
+      default: false,
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,
@@ -112,15 +123,16 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
+  if (!this.isModified('password') || !this.password) {
     return next();
   }
-  const salt = await bcrypt.genSalt(12); // Production grade 12 rounds
+  const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 

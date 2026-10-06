@@ -33,6 +33,32 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
+  // Send OTP
+  sendOtp: async phoneNumber => {
+    set({isLoading: true, error: null});
+    const result = await authService.sendOtp(phoneNumber);
+    set({isLoading: false, error: result.success ? null : result.message});
+    return result;
+  },
+
+  // Verify OTP
+  verifyOtp: async otpData => {
+    set({isLoading: true, error: null});
+    const result = await authService.verifyOtp(otpData);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      set({
+        user: userObj,
+        token: result.data.token,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } else {
+      set({error: result.message, isLoading: false});
+    }
+    return result;
+  },
+
   // Register
   register: async userData => {
     set({isLoading: true, error: null});
@@ -50,27 +76,10 @@ const useAuthStore = create((set, get) => ({
     return result;
   },
 
-  // Login
+  // Login (Password legacy fallback)
   login: async credentials => {
     set({isLoading: true, error: null});
     const result = await authService.login(credentials);
-    if (result.success) {
-      set({
-        user: result.data.user,
-        token: result.data.token,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-    } else {
-      set({error: result.message, isLoading: false});
-    }
-    return result;
-  },
-
-  // Google Sign-In
-  googleSignIn: async idToken => {
-    set({isLoading: true, error: null});
-    const result = await authService.googleSignIn(idToken);
     if (result.success) {
       set({
         user: result.data.user,
@@ -110,10 +119,10 @@ const useAuthStore = create((set, get) => ({
 
   // Getters
   isCustomer: () => get().user?.role === USER_ROLES.CUSTOMER,
+  isStudent: () => get().user?.role === 'student',
   isSeller: () => get().user?.role === USER_ROLES.SELLER,
   isAdmin: () => get().user?.role === USER_ROLES.ADMIN,
 }));
 
 export { useAuthStore };
 export default useAuthStore;
-

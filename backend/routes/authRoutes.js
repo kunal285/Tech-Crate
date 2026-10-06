@@ -19,6 +19,11 @@ const {
   revokeAllSessions,
   getSecurityLogs,
 } = require('../controllers/authController');
+const {
+  sendOtp,
+  verifyOtp,
+  resendOtp,
+} = require('../controllers/otpAuthController');
 const { protect } = require('../middleware/authMiddleware');
 const {
   authLimiter,
@@ -31,7 +36,12 @@ const {
   validatePasswordResetInput,
 } = require('../middleware/validationMiddleware');
 
-// Public Authentication Endpoints (Rate Limited & Validated)
+// Customer & Student Passwordless OTP Authentication Endpoints
+router.post('/send-otp', authLimiter, sendOtp);
+router.post('/verify-otp', authLimiter, verifyOtp);
+router.post('/resend-otp', verificationLimiter, resendOtp);
+
+// Standard Authentication & Account Management Endpoints
 router.post('/register', authLimiter, validateRegistrationInput, registerUser);
 router.post('/verify-email', verificationLimiter, verifyEmail);
 router.post('/resend-verification', verificationLimiter, resendVerificationEmail);
@@ -40,9 +50,10 @@ router.post('/refresh-token', refreshAccessToken);
 router.post('/forgot-password', passwordResetLimiter, forgotPassword);
 router.post('/reset-password', passwordResetLimiter, validatePasswordResetInput, resetPassword);
 
-// Protected Authentication & Profile Endpoints
+// Protected Profile & Security Endpoints
 router.post('/logout', protect, logoutUser);
 router.get('/profile', protect, getUserProfile);
+router.get('/me', protect, getUserProfile);
 router.put('/profile', protect, updateUserProfile);
 
 // 2FA Management Endpoints

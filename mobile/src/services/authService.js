@@ -3,7 +3,27 @@ import {apiPost, apiGet, apiPut} from './api';
 import {STORAGE_KEYS} from '../constants';
 
 const authService = {
-  // Register new user
+  // Send OTP to Mobile Number
+  sendOtp: async phoneNumber => {
+    return await apiPost('/auth/send-otp', {phoneNumber});
+  },
+
+  // Verify 6-Digit OTP
+  verifyOtp: async otpData => {
+    const result = await apiPost('/auth/verify-otp', otpData);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      await authService.persistSession(result.data.token, userObj);
+    }
+    return result;
+  },
+
+  // Resend OTP
+  resendOtp: async phoneNumber => {
+    return await apiPost('/auth/resend-otp', {phoneNumber});
+  },
+
+  // Register user
   register: async userData => {
     const result = await apiPost('/auth/register', userData);
     if (result.success && result.data?.token) {
@@ -13,19 +33,9 @@ const authService = {
     return result;
   },
 
-  // Login user
+  // Login user (password legacy)
   login: async credentials => {
     const result = await apiPost('/auth/login', credentials);
-    if (result.success && result.data?.token) {
-      const userObj = result.data.user || result.data;
-      await authService.persistSession(result.data.token, userObj);
-    }
-    return result;
-  },
-
-  // Google Sign-In
-  googleSignIn: async idToken => {
-    const result = await apiPost('/auth/google', {idToken});
     if (result.success && result.data?.token) {
       const userObj = result.data.user || result.data;
       await authService.persistSession(result.data.token, userObj);
@@ -56,14 +66,6 @@ const authService = {
     return await apiPost('/auth/reset-password', {token, password});
   },
 
-  // Change password
-  changePassword: async (currentPassword, newPassword) => {
-    return await apiPost('/auth/change-password', {
-      currentPassword,
-      newPassword,
-    });
-  },
-
   // Get current user profile
   getProfile: async () => {
     return await apiGet('/auth/me');
@@ -72,11 +74,6 @@ const authService = {
   // Update profile
   updateProfile: async profileData => {
     return await apiPut('/auth/profile', profileData);
-  },
-
-  // Register as seller
-  registerSeller: async sellerData => {
-    return await apiPost('/auth/register-seller', sellerData);
   },
 
   // Persist auth session safely

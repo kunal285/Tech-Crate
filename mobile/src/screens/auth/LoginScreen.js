@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,53 +10,131 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import { Zap, Mail, Lock, Eye, EyeOff, Search, Store, KeyRound } from 'lucide-react-native';
-import {Colors, Typography, Spacing, BorderRadius, Shadows} from '../../theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Zap, Phone, Lock, ArrowRight, RefreshCw, GraduationCap, UserCheck, ShieldCheck } from 'lucide-react-native';
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import useAuthStore from '../../store/authStore';
 
-const LoginScreen = ({navigation}) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [totpCode, setTotpCode] = useState('');
-  const [recoveryCode, setRecoveryCode] = useState('');
-  const [require2FA, setRequire2FA] = useState(false);
-  const [useRecovery, setUseRecovery] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+const LoginScreen = ({ navigation }) => {
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [requestId, setRequestId] = useState('');
+  const [maskedPhone, setMaskedPhone] = useState('');
+  const [step, setStep] = useState(1); // 1: Send Phone, 2: Enter OTP
+  const [accountType, setAccountType] = useState('customer'); // 'customer' or 'student'
+  
+  // Student Additional Details (for new student activation)
+  const [name, setName] = useState('');
+  const [college, setCollege] = useState('');
+  const [branch, setBranch] = useState('');
+  const [studentId, setStudentId] = useState('');
+
+  // Timers
+  const [otpTimer, setOtpTimer] = useState(300); // 5 minutes (300 seconds)
+  const [cooldownTimer, setCooldownTimer] = useState(0); // 30 seconds resend cooldown
   const [errors, setErrors] = useState({});
 
-  const {login, isLoading, clearError} = useAuthStore();
+  const { sendOtp, verifyOtp, isLoading, error, clearError } = useAuthStore();
 
-  const validate = () => {
-    const newErrors = {};
-    if (!email.trim()) newErrors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      newErrors.email = 'Enter a valid email address';
-    if (!password) newErrors.password = 'Password is required';
-    else if (password.length < 8)
-      newErrors.password = 'Password must be at least 8 characters';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  // 5-Minute OTP Expiry Countdown
+  useEffect(() => {
+    let interval = null;
+    if (step === 2 && otpTimer > 0) {
+      interval = setInterval(() => {
+        setOtpTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (otpTimer === 0) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [step, otpTimer]);
+
+  // 30-Second Resend Cooldown Timer
+  useEffect(() => {
+    let interval = null;
+    if (cooldownTimer > 0) {
+      interval = setInterval(() => {
+        setCooldownTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (cooldownTimer === 0) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [cooldownTimer]);
+
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const handleLogin = async () => {
+  const validatePhone = () => {
+    const clean = phone.replace(/\D/g, '');
+    if (!clean || clean.length !== 10) {
+      setErrors({ phone: 'Enter a valid 10-digit mobile number' });
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
+  const handleSendOtp = async () => {
     clearError();
-    if (!require2FA && !validate()) return;
-    const result = await login({
-      email: email.trim().toLowerCase(),
-      password,
-      totpCode: useRecovery ? undefined : totpCode,
-      recoveryCode: useRecovery ? recoveryCode : undefined,
+    if (!validatePhone()) return;
+
+    const result = await sendOtp(phone);
+    if (result.success) {
+      setRequestId(result.data.requestId);
+      setMaskedPhone(result.data.maskedPhone || `+91 ******${phone.slice(-4)}`);
+      setStep(2);
+      setOtpTimer(300); // Reset 5 min timer
+      setCooldownTimer(30); // 30s cooldown
+    } else {
+      Alert.alert('OTP Request', result.message);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (cooldownTimer > 0) return;
+    clearError();
+    const result = await sendOtp(phone);
+    if (result.success) {
+      setRequestId(result.data.requestId);
+      setOtpTimer(300);
+      setCooldownTimer(30);
+      Alert.alert('OTP Resent', 'A new 6-digit code has been sent to your mobile number.');
+    } else {
+      Alert.alert('Resend Failed', result.message);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    clearError();
+    if (!otp || otp.length !== 6) {
+      setErrors({ otp: 'Enter 6-digit verification code' });
+      return;
+    }
+
+    if (otpTimer === 0) {
+      Alert.alert('OTP Expired', 'Your OTP has expired. Please request a new code.');
+      return;
+    }
+
+    const result = await verifyOtp({
+      phoneNumber: phone,
+      otp,
+      requestId,
+      accountType,
+      name: name.trim(),
+      college: college.trim(),
+      branch: branch.trim(),
+      studentId: studentId.trim(),
     });
 
     if (!result.success) {
-      if (result.data?.require2FA) {
-        setRequire2FA(true);
-      } else {
-        Alert.alert('Authentication Failed', result.message || 'Invalid email or password.');
-      }
+      Alert.alert('Verification Failed', result.message);
     }
   };
 
@@ -79,128 +157,145 @@ const LoginScreen = ({navigation}) => {
               </View>
               <Text style={styles.logoText}>ProjectKart</Text>
             </View>
-            <Text style={styles.welcomeText}>Welcome Back!</Text>
+            <Text style={styles.welcomeText}>Welcome Back 👋</Text>
             <Text style={styles.subtitleText}>
-              Sign in to continue building amazing projects
+              {step === 1 ? 'Login securely with Mobile Number & OTP' : 'Enter 6-digit verification code'}
             </Text>
-          </View>
 
-          {/* Form */}
-          <View style={styles.form}>
-            {!require2FA ? (
-              <>
-                <Input
-                  label="Email Address"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="you@example.com"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  error={errors.email}
-                  leftIcon={<Mail size={18} color={Colors.textMuted} />}
-                />
-
-                <Input
-                  label="Password"
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  secureTextEntry={!showPassword}
-                  error={errors.password}
-                  leftIcon={<Lock size={18} color={Colors.textMuted} />}
-                  rightIcon={
-                    showPassword ? <EyeOff size={18} color={Colors.textMuted} /> : <Eye size={18} color={Colors.textMuted} />
-                  }
-                  onRightIconPress={() => setShowPassword(!showPassword)}
-                />
-
+            {/* Account Type Selector (Customer / Student) */}
+            {step === 1 && (
+              <View style={styles.roleSelector}>
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('ForgotPassword')}
-                  style={styles.forgotBtn}>
-                  <Text style={styles.forgotText}>Forgot Password?</Text>
+                  style={[styles.roleTab, accountType === 'customer' && styles.roleTabActive]}
+                  onPress={() => setAccountType('customer')}>
+                  <UserCheck size={16} color={accountType === 'customer' ? Colors.white : Colors.textMuted} />
+                  <Text style={[styles.roleTabText, accountType === 'customer' && styles.roleTabTextActive]}>
+                    Customer Account
+                  </Text>
                 </TouchableOpacity>
-              </>
-            ) : (
-              <View style={styles.mfaBox}>
-                <View style={styles.mfaHeader}>
-                  <KeyRound size={20} color={Colors.primary} />
-                  <Text style={styles.mfaTitle}>Two-Factor Authentication Required</Text>
-                </View>
-
-                {!useRecovery ? (
-                  <Input
-                    label="6-Digit Authenticator Code"
-                    value={totpCode}
-                    onChangeText={v => setTotpCode(v.replace(/\D/g, ''))}
-                    placeholder="000000"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    leftIcon={<Lock size={18} color={Colors.primary} />}
-                  />
-                ) : (
-                  <Input
-                    label="Backup Recovery Code"
-                    value={recoveryCode}
-                    onChangeText={v => setRecoveryCode(v.toUpperCase())}
-                    placeholder="XXXXXXXX"
-                    autoCapitalize="characters"
-                    leftIcon={<Lock size={18} color={Colors.primary} />}
-                  />
-                )}
-
                 <TouchableOpacity
-                  onPress={() => setUseRecovery(!useRecovery)}
-                  style={{ marginBottom: 16 }}>
-                  <Text style={styles.mfaToggleText}>
-                    {useRecovery ? 'Use Authenticator App' : 'Use Recovery Code'}
+                  style={[styles.roleTab, accountType === 'student' && styles.roleTabActive]}
+                  onPress={() => setAccountType('student')}>
+                  <GraduationCap size={16} color={accountType === 'student' ? Colors.white : Colors.textMuted} />
+                  <Text style={[styles.roleTabText, accountType === 'student' && styles.roleTabTextActive]}>
+                    Student Account
                   </Text>
                 </TouchableOpacity>
               </View>
             )}
-
-            <Button
-              title={require2FA ? 'Verify 2FA' : 'Sign In'}
-              onPress={handleLogin}
-              loading={isLoading}
-              fullWidth
-              size="lg"
-              style={styles.loginBtn}
-            />
-
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Google Sign In */}
-            <TouchableOpacity style={styles.googleBtn} activeOpacity={0.8}>
-              <Search size={18} color={Colors.primary} />
-              <Text style={styles.googleText}>Sign in with Google</Text>
-            </TouchableOpacity>
           </View>
 
-          {/* Register Link */}
-          <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Step 1: Send Phone OTP */}
+          {step === 1 && (
+            <View style={styles.form}>
+              <Input
+                label="Mobile Number"
+                value={phone}
+                onChangeText={(v) => setPhone(v.replace(/\D/g, ''))}
+                placeholder="9876543210"
+                keyboardType="number-pad"
+                maxLength={10}
+                error={errors.phone}
+                leftIcon={<Text style={styles.prefixText}>+91</Text>}
+              />
 
-          {/* Seller Register Link */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate('RegisterSeller')}
-            style={styles.sellerLink}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Store size={16} color={Colors.primary} />
-              <Text style={styles.sellerLinkText}>
-                Become a Seller on ProjectKart
-              </Text>
+              {accountType === 'student' && (
+                <View style={styles.studentInfoBox}>
+                  <Text style={styles.studentInfoTitle}>Student Account Verification</Text>
+                  <Input
+                    label="Full Name"
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Kunal Gavit"
+                  />
+                  <Input
+                    label="College / Institution"
+                    value={college}
+                    onChangeText={setCollege}
+                    placeholder="IIT Bombay"
+                  />
+                  <Input
+                    label="Branch / Course"
+                    value={branch}
+                    onChangeText={setBranch}
+                    placeholder="Electronics & Electrical"
+                  />
+                </View>
+              )}
+
+              <Button
+                title="Send OTP"
+                onPress={handleSendOtp}
+                loading={isLoading}
+                fullWidth
+                size="lg"
+                style={styles.actionBtn}
+              />
             </View>
-          </TouchableOpacity>
+          )}
+
+          {/* Step 2: Enter 6-Digit OTP */}
+          {step === 2 && (
+            <View style={styles.form}>
+              <View style={styles.verifyHeaderBox}>
+                <Text style={styles.verifyTitle}>Verify Mobile Number</Text>
+                <Text style={styles.verifySubtitle}>
+                  OTP sent to <Text style={styles.boldPhone}>{maskedPhone}</Text>
+                </Text>
+                <TouchableOpacity onPress={() => setStep(1)}>
+                  <Text style={styles.changeNumberText}>Edit Phone Number</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Input
+                label="6-Digit Verification Code"
+                value={otp}
+                onChangeText={(v) => setOtp(v.replace(/\D/g, ''))}
+                placeholder="_ _ _ _ _ _"
+                keyboardType="number-pad"
+                maxLength={6}
+                error={errors.otp}
+                style={styles.otpInput}
+                leftIcon={<Lock size={18} color={Colors.primary} />}
+              />
+
+              <View style={styles.timerRow}>
+                <Text style={styles.timerLabel}>OTP expires in: </Text>
+                <Text style={[styles.timerValue, otpTimer === 0 && { color: '#EF4444' }]}>
+                  {otpTimer > 0 ? formatTimer(otpTimer) : 'OTP Expired'}
+                </Text>
+              </View>
+
+              <Button
+                title="Verify OTP"
+                onPress={handleVerifyOtp}
+                loading={isLoading}
+                disabled={otpTimer === 0}
+                fullWidth
+                size="lg"
+                style={styles.actionBtn}
+              />
+
+              <View style={styles.resendContainer}>
+                <Text style={styles.resendText}>Didn't receive the OTP?</Text>
+                <TouchableOpacity
+                  onPress={handleResendOtp}
+                  disabled={cooldownTimer > 0}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <RefreshCw size={14} color={cooldownTimer > 0 ? Colors.textMuted : Colors.primary} />
+                  <Text style={[styles.resendBtnText, cooldownTimer > 0 && { color: Colors.textMuted }]}>
+                    {cooldownTimer > 0 ? `Resend available in ${cooldownTimer}s` : 'Resend OTP'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Footer Security Badge */}
+          <View style={styles.securityBadge}>
+            <ShieldCheck size={16} color="#10B981" />
+            <Text style={styles.securityText}>256-Bit Cryptographically Secure Passwordless Auth</Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -208,25 +303,11 @@ const LoginScreen = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
-  flex: {flex: 1},
-  container: {
-    flex: 1,
-    backgroundColor: Colors.white,
-  },
-  scroll: {
-    flexGrow: 1,
-    padding: Spacing.base,
-  },
-  header: {
-    alignItems: 'center',
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.xl,
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
+  flex: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.white },
+  scroll: { flexGrow: 1, padding: Spacing.base },
+  header: { alignItems: 'center', paddingTop: Spacing.lg, paddingBottom: Spacing.base },
+  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
   logoIcon: {
     width: 44,
     height: 44,
@@ -236,7 +317,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: Spacing.sm,
   },
-  logoIconText: {fontSize: 22},
   logoText: {
     fontSize: Typography.fontSize['2xl'],
     fontWeight: Typography.fontWeight.extrabold,
@@ -246,115 +326,83 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize['2xl'],
     fontWeight: Typography.fontWeight.bold,
     color: Colors.textPrimary,
-    marginBottom: Spacing.sm,
+    marginBottom: 4,
   },
   subtitleText: {
-    fontSize: Typography.fontSize.base,
+    fontSize: Typography.fontSize.sm,
     color: Colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
   },
-  form: {
-    marginTop: Spacing.sm,
+  roleSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.lg,
+    padding: 4,
+    marginTop: Spacing.md,
+    width: '100%',
   },
-  forgotBtn: {
-    alignSelf: 'flex-end',
-    marginTop: -Spacing.sm,
+  roleTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.base,
+  },
+  roleTabActive: {
+    backgroundColor: Colors.primary,
+  },
+  roleTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  roleTabTextActive: {
+    color: Colors.white,
+    fontWeight: '700',
+  },
+  form: { marginTop: Spacing.sm },
+  prefixText: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginRight: 8 },
+  studentInfoBox: {
+    backgroundColor: Colors.primary + '08',
+    padding: Spacing.base,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
     marginBottom: Spacing.base,
   },
-  forgotText: {
-    fontSize: Typography.fontSize.sm,
-    color: Colors.primary,
-    fontWeight: Typography.fontWeight.semibold,
-  },
-  loginBtn: {
-    marginTop: Spacing.sm,
-  },
-  mfaBox: {
-    backgroundColor: Colors.primary + '08',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary + '20',
-    marginBottom: 16,
-  },
-  mfaHeader: {
-    flexDirection: 'row',
+  studentInfoTitle: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginBottom: 8 },
+  actionBtn: { marginTop: Spacing.sm },
+  verifyHeaderBox: {
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  mfaTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  mfaToggleText: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.xl,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    fontSize: Typography.fontSize.sm,
-    color: Colors.textMuted,
-    paddingHorizontal: Spacing.base,
-  },
-  googleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.base,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
-    ...Shadows.sm,
-    backgroundColor: Colors.white,
-  },
-  googleText: {
-    fontSize: Typography.fontSize.base,
-    fontWeight: Typography.fontWeight.semibold,
-    color: Colors.textPrimary,
-  },
-  registerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: Spacing.xl,
-  },
-  registerText: {
-    fontSize: Typography.fontSize.base,
-    color: Colors.textSecondary,
-  },
-  registerLink: {
-    fontSize: Typography.fontSize.base,
-    color: Colors.primary,
-    fontWeight: Typography.fontWeight.bold,
-  },
-  sellerLink: {
-    alignItems: 'center',
-    marginTop: Spacing.base,
+    backgroundColor: '#F8FAFC',
     padding: Spacing.base,
-    backgroundColor: Colors.primary + '08',
-    borderRadius: BorderRadius.base,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.primary + '20',
+    borderColor: Colors.border,
+    marginBottom: Spacing.base,
   },
-  sellerLinkText: {
-    fontSize: Typography.fontSize.sm,
-    color: Colors.primary,
-    fontWeight: Typography.fontWeight.semibold,
+  verifyTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4 },
+  verifySubtitle: { fontSize: 13, color: Colors.textSecondary },
+  boldPhone: { fontWeight: '700', color: Colors.primary },
+  changeNumberText: { fontSize: 12, color: Colors.secondary, fontWeight: '600', marginTop: 6 },
+  otpInput: { textAlign: 'center', letterSpacing: 8, fontSize: 20, fontWeight: '800' },
+  timerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 12 },
+  timerLabel: { fontSize: 13, color: Colors.textMuted },
+  timerValue: { fontSize: 14, fontWeight: '800', color: Colors.primary },
+  resendContainer: { alignItems: 'center', marginTop: Spacing.xl },
+  resendText: { fontSize: 13, color: Colors.textSecondary, marginBottom: 4 },
+  resendBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  securityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: Spacing['2xl'],
+    marginBottom: Spacing.base,
   },
+  securityText: { fontSize: 11, color: Colors.textMuted, fontWeight: '500' },
 });
 
 export default LoginScreen;

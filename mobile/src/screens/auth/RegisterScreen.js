@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,83 +10,49 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {Colors, Typography, Spacing} from '../../theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Zap, Phone, User, GraduationCap, Building2, BookOpen } from 'lucide-react-native';
+import { Colors, Typography, Spacing, BorderRadius } from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import useAuthStore from '../../store/authStore';
 
-const getPasswordStrength = (pass) => {
-  if (!pass) return { score: 0, label: '', color: '#CBD5E1' };
-  let score = 0;
-  if (pass.length >= 8) score += 25;
-  if (/[A-Z]/.test(pass)) score += 25;
-  if (/[a-z]/.test(pass)) score += 25;
-  if (/[0-9]/.test(pass) && /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)) score += 25;
-
-  if (score <= 25) return { score: 25, label: 'Weak (min 8 chars, A-Z, 0-9, special char)', color: '#EF4444' };
-  if (score <= 50) return { score: 50, label: 'Fair', color: '#F59E0B' };
-  if (score <= 75) return { score: 75, label: 'Good', color: '#3B82F6' };
-  return { score: 100, label: 'Strong', color: '#10B981' };
-};
-
-const RegisterScreen = ({navigation}) => {
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+const RegisterScreen = ({ navigation }) => {
+  const [accountType, setAccountType] = useState('customer'); // 'customer' or 'student'
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [college, setCollege] = useState('');
+  const [branch, setBranch] = useState('');
+  const [studentId, setStudentId] = useState('');
   const [errors, setErrors] = useState({});
 
-  const {register, isLoading, clearError} = useAuthStore();
-
-  const updateForm = (key, value) => setForm(prev => ({...prev, [key]: value}));
+  const { sendOtp, isLoading } = useAuthStore();
 
   const validate = () => {
     const newErrors = {};
-    if (!form.name.trim() || form.name.trim().length < 2)
+    if (!name.trim() || name.trim().length < 2)
       newErrors.name = 'Full name must be at least 2 characters';
-    if (!form.email.trim())
-      newErrors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      newErrors.email = 'Enter a valid email address';
-    if (form.phone && !/^[6-9]\d{9}$/.test(form.phone))
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10)
       newErrors.phone = 'Enter a valid 10-digit Indian mobile number';
-    if (!form.password)
-      newErrors.password = 'Password is required';
-    else if (form.password.length < 8)
-      newErrors.password = 'Password must be at least 8 characters';
-    else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(form.password))
-      newErrors.password = 'Must contain uppercase, lowercase, number & special character';
-    if (form.password !== form.confirmPassword)
-      newErrors.confirmPassword = 'Passwords do not match';
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      newErrors.email = 'Enter a valid email address';
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleRegister = async () => {
-    clearError();
+  const handleStartOtpRegistration = async () => {
     if (!validate()) return;
-    const result = await register({
-      name: form.name.trim(),
-      email: form.email.trim().toLowerCase(),
-      phone: form.phone,
-      password: form.password,
-      role: 'customer',
-    });
-    if (!result.success) {
-      Alert.alert('Registration Status', result.message);
-    } else {
-      Alert.alert('Registration Successful', result.message || 'Please check your email for verification link.');
+    const result = await sendOtp(phone);
+    if (result.success) {
+      Alert.alert('OTP Sent', 'A 6-digit verification code has been sent to your mobile number.');
       navigation.navigate('Login');
+    } else {
+      Alert.alert('OTP Request Failed', result.message);
     }
   };
-
-  const strength = getPasswordStrength(form.password);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -103,97 +69,106 @@ const RegisterScreen = ({navigation}) => {
           <View style={styles.header}>
             <View style={styles.logoRow}>
               <View style={styles.logoIcon}>
-                <Text style={styles.logoIconText}>⚡</Text>
+                <Zap size={22} color="#FFFFFF" />
               </View>
               <Text style={styles.logoText}>ProjectKart</Text>
             </View>
             <Text style={styles.titleText}>Create Account 🚀</Text>
             <Text style={styles.subtitleText}>
-              Join thousands of makers, students and engineers
+              Passwordless Mobile OTP Registration for Customers & Students
             </Text>
+
+            {/* Account Type Selector */}
+            <View style={styles.roleSelector}>
+              <TouchableOpacity
+                style={[styles.roleTab, accountType === 'customer' && styles.roleTabActive]}
+                onPress={() => setAccountType('customer')}>
+                <User size={16} color={accountType === 'customer' ? Colors.white : Colors.textMuted} />
+                <Text style={[styles.roleTabText, accountType === 'customer' && styles.roleTabTextActive]}>
+                  Customer
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.roleTab, accountType === 'student' && styles.roleTabActive]}
+                onPress={() => setAccountType('student')}>
+                <GraduationCap size={16} color={accountType === 'student' ? Colors.white : Colors.textMuted} />
+                <Text style={[styles.roleTabText, accountType === 'student' && styles.roleTabTextActive]}>
+                  Student
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
             <Input
               label="Full Name"
-              value={form.name}
-              onChangeText={v => updateForm('name', v)}
+              value={name}
+              onChangeText={setName}
               placeholder="John Doe"
               autoCapitalize="words"
               error={errors.name}
               required
-              leftIcon={<Text style={styles.icon}>👤</Text>}
+              leftIcon={<User size={18} color={Colors.textMuted} />}
             />
+
             <Input
-              label="Email Address"
-              value={form.email}
-              onChangeText={v => updateForm('email', v)}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              error={errors.email}
-              required
-              leftIcon={<Text style={styles.icon}>✉️</Text>}
-            />
-            <Input
-              label="Mobile Number (Optional)"
-              value={form.phone}
-              onChangeText={v => updateForm('phone', v)}
+              label="Mobile Number"
+              value={phone}
+              onChangeText={(v) => setPhone(v.replace(/\D/g, ''))}
               placeholder="9876543210"
               keyboardType="number-pad"
               maxLength={10}
               error={errors.phone}
-              leftIcon={<Text style={styles.icon}>📱</Text>}
-            />
-            <Input
-              label="Password"
-              value={form.password}
-              onChangeText={v => updateForm('password', v)}
-              placeholder="Min. 8 chars (A-Z, a-z, 0-9, @#$)"
-              secureTextEntry={!showPassword}
-              error={errors.password}
               required
-              leftIcon={<Text style={styles.icon}>🔒</Text>}
-              rightIcon={<Text style={styles.icon}>{showPassword ? '👁️' : '🙈'}</Text>}
-              onRightIconPress={() => setShowPassword(!showPassword)}
+              leftIcon={<Text style={styles.prefixText}>+91</Text>}
             />
 
-            {/* Password Strength Indicator */}
-            {form.password.length > 0 && (
-              <View style={styles.strengthContainer}>
-                <View style={styles.strengthBarBg}>
-                  <View style={[styles.strengthBarFill, { width: `${strength.score}%`, backgroundColor: strength.color }]} />
-                </View>
-                <Text style={[styles.strengthText, { color: strength.color }]}>
-                  Password Strength: {strength.label}
-                </Text>
+            <Input
+              label="Email Address (Optional)"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email}
+              leftIcon={<Text style={styles.icon}>✉️</Text>}
+            />
+
+            {accountType === 'student' && (
+              <View style={styles.studentBox}>
+                <Text style={styles.studentBoxTitle}>Academic & Student Information</Text>
+                <Input
+                  label="College / University"
+                  value={college}
+                  onChangeText={setCollege}
+                  placeholder="IIT Bombay / VJTI Mumbai"
+                  leftIcon={<Building2 size={18} color={Colors.primary} />}
+                />
+                <Input
+                  label="Branch / Course"
+                  value={branch}
+                  onChangeText={setBranch}
+                  placeholder="Electrical & Electronics"
+                  leftIcon={<BookOpen size={18} color={Colors.primary} />}
+                />
+                <Input
+                  label="Student ID / Roll No (Optional)"
+                  value={studentId}
+                  onChangeText={setStudentId}
+                  placeholder="2026-EE-1049"
+                  leftIcon={<GraduationCap size={18} color={Colors.primary} />}
+                />
               </View>
             )}
 
-            <Input
-              label="Confirm Password"
-              value={form.confirmPassword}
-              onChangeText={v => updateForm('confirmPassword', v)}
-              placeholder="Re-enter your password"
-              secureTextEntry={!showConfirm}
-              error={errors.confirmPassword}
-              required
-              leftIcon={<Text style={styles.icon}>🔒</Text>}
-              rightIcon={<Text style={styles.icon}>{showConfirm ? '👁️' : '🙈'}</Text>}
-              onRightIconPress={() => setShowConfirm(!showConfirm)}
-            />
-
-            {/* Terms */}
             <Text style={styles.termsText}>
-              By creating an account, you agree to our{' '}
-              <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
+              By proceeding, an OTP will be sent to your mobile number for instant passwordless verification.
             </Text>
 
             <Button
-              title="Create Account"
-              onPress={handleRegister}
+              title="Send Registration OTP"
+              onPress={handleStartOtpRegistration}
               loading={isLoading}
               fullWidth
               size="lg"
@@ -205,7 +180,7 @@ const RegisterScreen = ({navigation}) => {
           <View style={styles.loginRow}>
             <Text style={styles.loginText}>Already have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginLink}>Sign In</Text>
+              <Text style={styles.loginLink}>Login with OTP</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -215,22 +190,20 @@ const RegisterScreen = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
-  flex: {flex: 1},
-  container: {flex: 1, backgroundColor: Colors.white},
-  scroll: {flexGrow: 1, padding: Spacing.base},
-  header: {
-    alignItems: 'center',
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.xl,
-  },
-  logoRow: {flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xl},
+  flex: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.white },
+  scroll: { flexGrow: 1, padding: Spacing.base },
+  header: { alignItems: 'center', paddingTop: Spacing.lg, paddingBottom: Spacing.base },
+  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
   logoIcon: {
-    width: 44, height: 44, borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: Colors.secondary,
-    justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: Spacing.sm,
   },
-  logoIconText: {fontSize: 22},
   logoText: {
     fontSize: Typography.fontSize['2xl'],
     fontWeight: Typography.fontWeight.extrabold,
@@ -240,19 +213,45 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize['2xl'],
     fontWeight: Typography.fontWeight.bold,
     color: Colors.textPrimary,
-    marginBottom: Spacing.sm,
+    marginBottom: 4,
   },
   subtitleText: {
-    fontSize: Typography.fontSize.base,
+    fontSize: Typography.fontSize.xs,
     color: Colors.textSecondary,
     textAlign: 'center',
   },
-  form: {marginTop: Spacing.sm},
-  icon: {fontSize: 18},
-  strengthContainer: {marginTop: -8, marginBottom: 12},
-  strengthBarBg: {height: 4, borderRadius: 2, backgroundColor: '#E2E8F0', overflow: 'hidden'},
-  strengthBarFill: {height: '100%'},
-  strengthText: {fontSize: 11, fontWeight: '600', marginTop: 4},
+  roleSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.lg,
+    padding: 4,
+    marginTop: Spacing.md,
+    width: '100%',
+  },
+  roleTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.base,
+  },
+  roleTabActive: { backgroundColor: Colors.primary },
+  roleTabText: { fontSize: 13, fontWeight: '600', color: Colors.textMuted },
+  roleTabTextActive: { color: Colors.white, fontWeight: '700' },
+  form: { marginTop: Spacing.sm },
+  prefixText: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginRight: 8 },
+  icon: { fontSize: 18 },
+  studentBox: {
+    backgroundColor: Colors.primary + '08',
+    padding: Spacing.base,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+    marginBottom: Spacing.base,
+  },
+  studentBoxTitle: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginBottom: 8 },
   termsText: {
     fontSize: Typography.fontSize.xs,
     color: Colors.textMuted,
@@ -260,11 +259,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: Spacing.base,
   },
-  termsLink: {
-    color: Colors.primary,
-    fontWeight: Typography.fontWeight.semibold,
-  },
-  registerBtn: {marginTop: Spacing.xs},
+  registerBtn: { marginTop: Spacing.xs },
   loginRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -272,7 +267,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xl,
     marginBottom: Spacing.xl,
   },
-  loginText: {fontSize: Typography.fontSize.base, color: Colors.textSecondary},
+  loginText: { fontSize: Typography.fontSize.base, color: Colors.textSecondary },
   loginLink: {
     fontSize: Typography.fontSize.base,
     color: Colors.primary,
