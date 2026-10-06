@@ -1,6 +1,6 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
-import {ActivityIndicator, View, StyleSheet} from 'react-native';
+import {View, StyleSheet} from 'react-native';
 
 import useAuthStore from '../store/authStore';
 import {USER_ROLES} from '../constants';
@@ -10,24 +10,23 @@ import AuthNavigator from './AuthNavigator';
 import CustomerNavigator from './CustomerNavigator';
 import SellerNavigator from './SellerNavigator';
 import AdminNavigator from './AdminNavigator';
+import SplashScreen from '../screens/auth/SplashScreen';
 
 const AppNavigator = () => {
   const {isAuthenticated, isInitialized, user, initialize} = useAuthStore();
+  const [splashFinished, setSplashFinished] = useState(false);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
-  if (!isInitialized) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
+  // Initial cold-boot animated splash screen
+  if (!isInitialized || !splashFinished) {
+    return <SplashScreen onFinish={() => setSplashFinished(true)} />;
   }
 
   const getNavigator = () => {
-    if (!isAuthenticated) return <AuthNavigator />;
+    if (!isAuthenticated) return <AuthNavigator initialRouteName="Login" />;
     switch (user?.role) {
       case USER_ROLES.SELLER:
         return <SellerNavigator />;
@@ -44,14 +43,5 @@ const AppNavigator = () => {
     </NavigationContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-  },
-});
 
 export default AppNavigator;

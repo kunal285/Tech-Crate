@@ -14,7 +14,7 @@ import useAuthStore from '../../store/authStore';
 
 const {width, height} = Dimensions.get('window');
 
-const SplashScreen = ({navigation}) => {
+const SplashScreen = ({navigation, onFinish}) => {
   const {isAuthenticated, isInitialized} = useAuthStore();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -44,17 +44,15 @@ const SplashScreen = ({navigation}) => {
 
     // Navigate after delay
     const timer = setTimeout(() => {
-      if (isInitialized) {
-        if (isAuthenticated) {
-          // Navigation happens automatically via AppNavigator
-        } else {
-          navigation.replace('Login');
-        }
+      if (onFinish) {
+        onFinish();
+      } else if (navigation && typeof navigation.replace === 'function') {
+        navigation.replace('Login');
       }
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [isInitialized, isAuthenticated, fadeAnim, scaleAnim, taglineAnim, navigation]);
+  }, [isInitialized, isAuthenticated, fadeAnim, scaleAnim, taglineAnim, navigation, onFinish]);
 
   return (
     <View style={styles.container}>

@@ -8,17 +8,17 @@ import RegisterSellerScreen from '../screens/auth/RegisterSellerScreen';
 
 const Stack = createStackNavigator();
 
-const AuthNavigator = () => (
+const AuthNavigator = ({initialRouteName = 'Login'}) => (
   <Stack.Navigator
     screenOptions={{
       headerShown: false,
       animationEnabled: true,
       cardStyle: {backgroundColor: '#FFFFFF'},
     }}
-    initialRouteName="Splash">
-    <Stack.Screen name="Splash" component={SplashScreen} />
+    initialRouteName={initialRouteName}>
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
+    <Stack.Screen name="Splash" component={SplashScreen} />
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     <Stack.Screen name="RegisterSeller" component={RegisterSellerScreen} />
   </Stack.Navigator>

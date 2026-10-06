@@ -44,7 +44,7 @@ const createRefreshTokenSession = async (user, req) => {
 };
 
 /**
- * Log Security Event
+ * Log Security Audit Event
  */
 const logSecurityEvent = async (userId, action, req, metadata = {}) => {
   try {
@@ -71,7 +71,7 @@ const normalizePhone = (phone) => {
   const digits = phone.replace(/\D/g, '');
   if (digits.length === 10) return digits;
   if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
-  return digits;
+  return digits.slice(-10);
 };
 
 // ============================================================================
@@ -86,7 +86,10 @@ const sendOtp = async (req, res) => {
     const cleanPhone = normalizePhone(phoneNumber);
 
     if (!cleanPhone || cleanPhone.length !== 10) {
-      return res.status(400).json({ message: 'Please enter a valid 10-digit mobile number.' });
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid 10-digit mobile number.',
+      });
     }
 
     // Check 30-Second Resend Cooldown
@@ -97,29 +100,48 @@ const sendOtp = async (req, res) => {
     });
 
     if (recentChallenge) {
-      const waitSeconds = Math.ceil((recentChallenge.createdAt.getTime() + RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000);
+      const waitSeconds = Math.ceil(
+        (recentChallenge.createdAt.getTime() + RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000
+      );
       return res.status(429).json({
+        success: false,
         message: `Please wait ${waitSeconds} seconds before requesting a new OTP.`,
         cooldownSeconds: waitSeconds,
       });
     }
 
-    // Generate 6-digit OTP
-    const rawOtp = crypto.randomInt(100000, 999999).toString();
+    // Invalidate any previous unused challenges for this phone
+    await OtpChallenge.updateMany(
+      { phoneNumber: cleanPhone, used: false },
+      { used: true }
+    );
+
+    // Generate cryptographically secure 6-digit OTP
+    const rawOtp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = hashToken(rawOtp);
     const requestId = crypto.randomBytes(16).toString('hex');
     const expiresAt = new Date(Date.now() + OTP_VALID_MINUTES * 60 * 1000);
 
-    // Save OtpChallenge
-    await OtpChallenge.create({
+    // Save OtpChallenge record in database
+    const challenge = await OtpChallenge.create({
       phoneNumber: cleanPhone,
       otpHash,
       requestId,
       expiresAt,
     });
 
-    // Dispatch SMS via provider
-    await sendOtpSMS(cleanPhone, rawOtp);
+    // Send real SMS through configured provider (Twilio / Fast2SMS / MSG91)
+    try {
+      await sendOtpSMS(cleanPhone, rawOtp);
+    } catch (smsError) {
+      // Clean up challenge if SMS sending failed so user is not stuck
+      await OtpChallenge.deleteOne({ _id: challenge._id });
+      return res.status(400).json({
+        success: false,
+        message: smsError.message || 'Failed to dispatch SMS OTP.',
+        error: smsError.message,
+      });
+    }
 
     const user = await User.findOne({ phone: cleanPhone });
     if (user) {
@@ -128,14 +150,17 @@ const sendOtp = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'If this mobile number is valid, an OTP has been sent.',
+      message: 'OTP has been dispatched to your mobile number.',
       maskedPhone: maskPhoneNumber(cleanPhone),
       requestId,
       expiresAt,
       cooldownSeconds: RESEND_COOLDOWN_SECONDS,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to send OTP due to a server error.' });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to send OTP due to a server error.',
+    });
   }
 };
 
@@ -143,11 +168,24 @@ const sendOtp = async (req, res) => {
 // @route POST /api/auth/verify-otp
 const verifyOtp = async (req, res) => {
   try {
-    const { phoneNumber, otp, requestId, name, email, accountType, college, branch, studentId } = req.body;
+    const {
+      phoneNumber,
+      otp,
+      requestId,
+      name,
+      email,
+      accountType,
+      college,
+      branch,
+      studentId,
+    } = req.body;
     const cleanPhone = normalizePhone(phoneNumber);
 
     if (!cleanPhone || !otp || !requestId) {
-      return res.status(400).json({ message: 'Mobile number, OTP code, and Request ID are required.' });
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number, 6-digit OTP, and Request ID are required.',
+      });
     }
 
     const challenge = await OtpChallenge.findOne({
@@ -157,25 +195,34 @@ const verifyOtp = async (req, res) => {
     });
 
     if (!challenge) {
-      return res.status(400).json({ message: 'OTP has expired or is invalid. Please request a new OTP.' });
+      return res.status(400).json({
+        success: false,
+        message: 'OTP challenge is invalid or has already been used. Please request a new OTP.',
+      });
     }
 
-    // Server-side Expiration Check (Exactly 5 minutes)
+    // Strict 5-Minute Expiry Check
     if (challenge.expiresAt < new Date()) {
       challenge.used = true;
       await challenge.save();
-      return res.status(400).json({ message: 'OTP Expired. Please request a new OTP.' });
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired (validity is 5 minutes). Please request a new code.',
+      });
     }
 
-    // Attempt Limit Check (Maximum 5 attempts)
+    // Rate Limit Attempt Check (Max 5 attempts)
     if (challenge.attemptCount >= 5) {
       challenge.used = true;
       await challenge.save();
-      return res.status(400).json({ message: 'Too many incorrect attempts. Please request a new OTP.' });
+      return res.status(400).json({
+        success: false,
+        message: 'Too many incorrect attempts. This OTP has been invalidated. Please request a new code.',
+      });
     }
 
-    // Verify OTP SHA-256 Hash
-    const inputHash = hashToken(otp.trim());
+    // SHA-256 OTP Hash Verification
+    const inputHash = hashToken(String(otp).trim());
     if (inputHash !== challenge.otpHash) {
       challenge.attemptCount += 1;
       if (challenge.attemptCount >= 5) {
@@ -184,32 +231,36 @@ const verifyOtp = async (req, res) => {
       await challenge.save();
 
       return res.status(400).json({
+        success: false,
         message: challenge.used
-          ? 'Too many incorrect attempts. Please request a new OTP.'
+          ? 'Too many incorrect attempts. This OTP has been invalidated.'
           : 'Invalid OTP code. Please check and try again.',
         remainingAttempts: Math.max(0, 5 - challenge.attemptCount),
       });
     }
 
-    // Mark OTP as Used (Single-use enforcement)
+    // Single-use enforcement: Mark OTP Challenge as used immediately
     challenge.used = true;
     await challenge.save();
 
-    // Find or Auto-Create User Account
+    // Check for existing account
     let user = await User.findOne({ phone: cleanPhone });
 
     // CRITICAL ADMIN ISOLATION CHECK
     if (user && user.role === 'admin') {
-      await logSecurityEvent(user._id, 'LOGIN_FAILED', req, { reason: 'Attempted admin login via customer OTP' });
+      await logSecurityEvent(user._id, 'LOGIN_FAILED', req, {
+        reason: 'Attempted admin login via Customer OTP endpoint',
+      });
       return res.status(403).json({
-        message: 'Admin accounts are not permitted to log in via Customer OTP. Please use the dedicated Admin Login console.',
+        success: false,
+        message: 'Admin accounts are isolated and cannot authenticate via Customer OTP. Use the dedicated Admin Console.',
       });
     }
 
-    if (!user) {
-      // Determine Account Type (Strict Role Validation - NEVER ALLOW ADMIN)
-      const targetRole = accountType === 'student' ? 'student' : 'customer';
+    // Determine target role (Only 'student' or 'customer' permitted)
+    const targetRole = accountType === 'student' ? 'student' : 'customer';
 
+    if (!user) {
       user = await User.create({
         name: name ? name.trim() : `User ${cleanPhone.slice(-4)}`,
         phone: cleanPhone,
@@ -225,11 +276,14 @@ const verifyOtp = async (req, res) => {
       if (college) user.college = college;
       if (branch) user.branch = branch;
       if (studentId) user.studentId = studentId;
+      if (accountType === 'student' && user.role !== 'student') {
+        user.role = 'student';
+      }
       user.lastLoginAt = new Date();
       await user.save();
     }
 
-    // Issue Access Token & Refresh Token Session
+    // Generate JWT Access Token and Refresh Session
     const rawRefreshToken = await createRefreshTokenSession(user, req);
     const accessToken = generateAccessToken(user._id);
 
@@ -255,7 +309,10 @@ const verifyOtp = async (req, res) => {
       refreshToken: rawRefreshToken,
     });
   } catch (error) {
-    res.status(500).json({ message: 'OTP verification failed due to a server error.' });
+    res.status(500).json({
+      success: false,
+      message: error.message || 'OTP verification failed due to a server error.',
+    });
   }
 };
 

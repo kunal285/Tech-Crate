@@ -12,6 +12,7 @@ export const APP_VERSION = '1.0.0';
 // Storage Keys
 export const STORAGE_KEYS = {
   AUTH_TOKEN: '@techcrate/auth_token',
+  REFRESH_TOKEN: '@techcrate/refresh_token',
   USER_DATA: '@techcrate/user_data',
   CART_DATA: '@techcrate/cart_data',
   WISHLIST_DATA: '@techcrate/wishlist_data',
@@ -22,6 +23,7 @@ export const STORAGE_KEYS = {
 // User Roles
 export const USER_ROLES = {
   CUSTOMER: 'customer',
+  STUDENT: 'student',
   SELLER: 'seller',
   ADMIN: 'admin',
 };

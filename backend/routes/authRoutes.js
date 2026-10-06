@@ -24,7 +24,7 @@ const {
   verifyOtp,
   resendOtp,
 } = require('../controllers/otpAuthController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, optionalProtect } = require('../middleware/authMiddleware');
 const {
   authLimiter,
   passwordResetLimiter,
@@ -51,7 +51,7 @@ router.post('/forgot-password', passwordResetLimiter, forgotPassword);
 router.post('/reset-password', passwordResetLimiter, validatePasswordResetInput, resetPassword);
 
 // Protected Profile & Security Endpoints
-router.post('/logout', protect, logoutUser);
+router.post('/logout', optionalProtect, logoutUser);
 router.get('/profile', protect, getUserProfile);
 router.get('/me', protect, getUserProfile);
 router.put('/profile', protect, updateUserProfile);

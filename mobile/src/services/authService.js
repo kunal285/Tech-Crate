@@ -3,22 +3,26 @@ import {apiPost, apiGet, apiPut} from './api';
 import {STORAGE_KEYS} from '../constants';
 
 const authService = {
-  // Send OTP to Mobile Number
+  // Send 6-Digit SMS OTP to Mobile Number
   sendOtp: async phoneNumber => {
     return await apiPost('/auth/send-otp', {phoneNumber});
   },
 
-  // Verify 6-Digit OTP
+  // Verify 6-Digit OTP & Initialize Session
   verifyOtp: async otpData => {
     const result = await apiPost('/auth/verify-otp', otpData);
     if (result.success && result.data?.token) {
       const userObj = result.data.user || result.data;
-      await authService.persistSession(result.data.token, userObj);
+      await authService.persistSession(
+        result.data.token,
+        userObj,
+        result.data.refreshToken
+      );
     }
     return result;
   },
 
-  // Resend OTP
+  // Resend 6-Digit OTP
   resendOtp: async phoneNumber => {
     return await apiPost('/auth/resend-otp', {phoneNumber});
   },
@@ -28,30 +32,40 @@ const authService = {
     const result = await apiPost('/auth/register', userData);
     if (result.success && result.data?.token) {
       const userObj = result.data.user || result.data;
-      await authService.persistSession(result.data.token, userObj);
+      await authService.persistSession(
+        result.data.token,
+        userObj,
+        result.data.refreshToken
+      );
     }
     return result;
   },
 
-  // Login user (password legacy)
+  // Login user (password fallback)
   login: async credentials => {
     const result = await apiPost('/auth/login', credentials);
     if (result.success && result.data?.token) {
       const userObj = result.data.user || result.data;
-      await authService.persistSession(result.data.token, userObj);
+      await authService.persistSession(
+        result.data.token,
+        userObj,
+        result.data.refreshToken
+      );
     }
     return result;
   },
 
-  // Logout
+  // Logout & Invalidate Session
   logout: async () => {
     try {
-      await apiPost('/auth/logout');
+      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      await apiPost('/auth/logout', {refreshToken});
     } catch {
-      // Silently fail on API error
+      // Silently proceed with local cleanup
     }
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.REFRESH_TOKEN,
       STORAGE_KEYS.USER_DATA,
     ]);
   },
@@ -76,12 +90,15 @@ const authService = {
     return await apiPut('/auth/profile', profileData);
   },
 
-  // Persist auth session safely
-  persistSession: async (token, user) => {
+  // Persist auth session safely in AsyncStorage
+  persistSession: async (token, user, refreshToken) => {
     if (!token) return;
     const safeUser = user || {};
     await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, String(token));
     await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(safeUser));
+    if (refreshToken) {
+      await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, String(refreshToken));
+    }
   },
 
   // Get stored session
@@ -89,8 +106,9 @@ const authService = {
     try {
       const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
       if (token && userData) {
-        return {token, user: JSON.parse(userData)};
+        return {token, user: JSON.parse(userData), refreshToken};
       }
       return null;
     } catch {

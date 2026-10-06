@@ -350,18 +350,27 @@ const refreshAccessToken = async (req, res) => {
 const logoutUser = async (req, res) => {
   try {
     const { refreshToken } = req.body;
+    let userId = req.user ? req.user._id : null;
+
     if (refreshToken) {
       const hashed = hashToken(refreshToken);
-      await RefreshToken.updateOne({ tokenHash: hashed }, { isRevoked: true });
+      const tokenDoc = await RefreshToken.findOneAndUpdate(
+        { tokenHash: hashed },
+        { isRevoked: true }
+      );
+      if (tokenDoc && !userId) {
+        userId = tokenDoc.user;
+      }
     }
 
-    if (req.user) {
-      await logSecurityEvent(req.user._id, 'SESSION_REVOKED', req);
+    if (userId) {
+      await RefreshToken.updateMany({ user: userId }, { isRevoked: true });
+      await logSecurityEvent(userId, 'SESSION_REVOKED', req);
     }
 
-    res.json({ message: 'Logged out successfully.' });
+    res.json({ success: true, message: 'Logged out successfully. Session invalidated.' });
   } catch (error) {
-    res.status(500).json({ message: 'Logout failed.' });
+    res.status(500).json({ success: false, message: 'Logout failed.' });
   }
 };
 
