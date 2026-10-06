@@ -71,7 +71,7 @@ const RegisterScreen = ({ navigation }) => {
               <View style={styles.logoIcon}>
                 <Zap size={22} color="#FFFFFF" />
               </View>
-              <Text style={styles.logoText}>ProjectKart</Text>
+              <Text style={styles.logoText}>Tech Crate</Text>
             </View>
             <Text style={styles.titleText}>Create Account</Text>
             <Text style={styles.subtitleText}>

@@ -232,7 +232,7 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.greeting}>
               Good {getGreeting()}, {user?.name?.split(' ')[0] || 'Maker'}!
             </Text>
-            <Text style={styles.logoFull}>ProjectKart</Text>
+            <Text style={styles.logoFull}>Tech Crate</Text>
           </View>
         </View>
         <View style={styles.appBarRight}>

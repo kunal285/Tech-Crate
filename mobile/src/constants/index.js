@@ -5,18 +5,18 @@ export const API_BASE_URL =
 export const API_TIMEOUT = 30000;
 
 // App Constants
-export const APP_NAME = 'ProjectKart';
+export const APP_NAME = 'Tech Crate';
 export const APP_TAGLINE = 'Everything You Need to Build.';
 export const APP_VERSION = '1.0.0';
 
 // Storage Keys
 export const STORAGE_KEYS = {
-  AUTH_TOKEN: '@projectkart/auth_token',
-  USER_DATA: '@projectkart/user_data',
-  CART_DATA: '@projectkart/cart_data',
-  WISHLIST_DATA: '@projectkart/wishlist_data',
-  ONBOARDING_DONE: '@projectkart/onboarding_done',
-  SEARCH_HISTORY: '@projectkart/search_history',
+  AUTH_TOKEN: '@techcrate/auth_token',
+  USER_DATA: '@techcrate/user_data',
+  CART_DATA: '@techcrate/cart_data',
+  WISHLIST_DATA: '@techcrate/wishlist_data',
+  ONBOARDING_DONE: '@techcrate/onboarding_done',
+  SEARCH_HISTORY: '@techcrate/search_history',
 };
 
 // User Roles

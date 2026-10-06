@@ -7,7 +7,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import {Zap} from 'lucide-react-native';
+import {Package, Cpu, Sparkles} from 'lucide-react-native';
 import {Colors, Typography, Spacing} from '../../theme';
 import useAuthStore from '../../store/authStore';
 
@@ -57,33 +57,33 @@ const SplashScreen = ({navigation}) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryDark || '#0F172A'} />
 
       {/* Background gradient effect */}
       <View style={styles.bgCircle1} />
       <View style={styles.bgCircle2} />
       <View style={styles.bgCircle3} />
 
-      {/* Logo */}
+      {/* Logo Container */}
       <Animated.View
         style={[
           styles.logoContainer,
           {opacity: fadeAnim, transform: [{scale: scaleAnim}]},
         ]}>
         <View style={styles.logoIcon}>
-          <Zap size={48} color="#FFFFFF" />
+          <Package size={52} color="#FFFFFF" strokeWidth={2.2} />
         </View>
-        <Text style={styles.logoText}>ProjectKart</Text>
+        <Text style={styles.logoText}>Tech Crate</Text>
       </Animated.View>
 
       {/* Tagline */}
       <Animated.Text style={[styles.tagline, {opacity: taglineAnim}]}>
-        Everything You Need to Build.
+        Engineering Electronics & Project Kits
       </Animated.Text>
 
       {/* Core concept */}
       <Animated.View style={[styles.conceptRow, {opacity: taglineAnim}]}>
-        {['Discover', '→', 'Learn', '→', 'Build', '→', 'Buy'].map(
+        {['Discover', '→', 'Learn', '→', 'Build', '→', 'Order'].map(
           (text, i) => (
             <Text
               key={i}

@@ -11,7 +11,7 @@ const OrderSuccessScreen = ({ navigation }) => {
       <View style={styles.content}>
         <CheckCircle size={64} color={Colors.success || '#10B981'} style={{ marginBottom: Spacing.md }} />
         <Text style={styles.title}>Order Placed Successfully!</Text>
-        <Text style={styles.subtitle}>Thank you for buying from ProjectKart.</Text>
+        <Text style={styles.subtitle}>Thank you for buying from Tech Crate.</Text>
         <TouchableOpacity 
           style={styles.homeBtn}
           onPress={() => navigation.navigate('HomeMain')}

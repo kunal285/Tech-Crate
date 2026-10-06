@@ -155,7 +155,7 @@ const LoginScreen = ({ navigation }) => {
               <View style={styles.logoIcon}>
                 <Zap size={22} color="#FFFFFF" />
               </View>
-              <Text style={styles.logoText}>ProjectKart</Text>
+              <Text style={styles.logoText}>Tech Crate</Text>
             </View>
             <Text style={styles.welcomeText}>Welcome Back</Text>
             <Text style={styles.subtitleText}>
