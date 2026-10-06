@@ -14,6 +14,9 @@ const securityLogSchema = new mongoose.Schema(
       enum: [
         'LOGIN_SUCCESS',
         'LOGIN_FAILED',
+        'OTP_SENT',
+        'CUSTOMER_LOGIN',
+        'STUDENT_LOGIN',
         'PASSWORD_RESET_REQUESTED',
         'PASSWORD_RESET_COMPLETED',
         'PASSWORD_CHANGED',

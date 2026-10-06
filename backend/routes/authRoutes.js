@@ -27,6 +27,7 @@ const {
 const { protect, optionalProtect } = require('../middleware/authMiddleware');
 const {
   authLimiter,
+  otpLimiter,
   passwordResetLimiter,
   verificationLimiter,
 } = require('../middleware/rateLimiter');
@@ -37,9 +38,9 @@ const {
 } = require('../middleware/validationMiddleware');
 
 // Customer & Student Passwordless OTP Authentication Endpoints
-router.post('/send-otp', authLimiter, sendOtp);
+router.post('/send-otp', otpLimiter, sendOtp);
 router.post('/verify-otp', authLimiter, verifyOtp);
-router.post('/resend-otp', verificationLimiter, resendOtp);
+router.post('/resend-otp', otpLimiter, resendOtp);
 
 // Standard Authentication & Account Management Endpoints
 router.post('/register', authLimiter, validateRegistrationInput, registerUser);

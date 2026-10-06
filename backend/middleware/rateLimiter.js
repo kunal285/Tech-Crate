@@ -1,15 +1,35 @@
 const rateLimit = require('express-rate-limit');
 
 /**
+ * Rate Limiter for OTP Send Endpoint (Strict - Max 5 per phone per 10 mins)
+ */
+const otpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Limit by IP + phone number combination
+    const phone = (req.body?.phoneNumber || '').replace(/\D/g, '').slice(-10);
+    return `${req.ip}_${phone}`;
+  },
+  message: {
+    success: false,
+    message: 'Too many OTP requests from this number. Please wait 10 minutes before requesting again.',
+  },
+});
+
+/**
  * Rate Limiter for Authentication endpoints (Login & Register)
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // Limit each IP to 15 requests per 15 minutes
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    message: 'Too many login/registration attempts from this IP. Please try again after 15 minutes.',
+    success: false,
+    message: 'Too many authentication attempts from this IP. Please try again after 15 minutes.',
   },
 });
 
@@ -18,10 +38,11 @@ const authLimiter = rateLimit({
  */
 const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // Limit each IP to 5 requests per hour
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
+    success: false,
     message: 'Too many password reset requests from this IP. Please try again after an hour.',
   },
 });
@@ -30,12 +51,13 @@ const passwordResetLimiter = rateLimit({
  * Rate Limiter for Email Verification Resend
  */
 const verificationLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per 15 minutes
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    message: 'Too many verification requests. Please try again after 15 minutes.',
+    success: false,
+    message: 'Too many verification requests. Please try again after 10 minutes.',
   },
 });
 
@@ -44,15 +66,17 @@ const verificationLimiter = rateLimit({
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // Limit each IP to 200 requests per 15 minutes
+  max: 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
+    success: false,
     message: 'Too many requests from this IP. Please slow down.',
   },
 });
 
 module.exports = {
+  otpLimiter,
   authLimiter,
   passwordResetLimiter,
   verificationLimiter,
