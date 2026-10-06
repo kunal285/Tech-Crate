@@ -308,6 +308,10 @@ const HomeScreen = ({ navigation }) => {
             data={CATEGORIES}
             horizontal
             showsHorizontalScrollIndicator={false}
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={3}
+            removeClippedSubviews={true}
             contentContainerStyle={styles.categoryList}
             keyExtractor={item => item.id}
             renderItem={({ item }) => <CategoryCard category={item} />}
@@ -325,6 +329,10 @@ const HomeScreen = ({ navigation }) => {
             data={displayKits}
             horizontal
             showsHorizontalScrollIndicator={false}
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={3}
+            removeClippedSubviews={true}
             contentContainerStyle={styles.kitList}
             keyExtractor={(item, index) => item._id || `kit-${index}`}
             renderItem={({ item }) => (
@@ -352,6 +360,10 @@ const HomeScreen = ({ navigation }) => {
             data={displayTrending}
             horizontal
             showsHorizontalScrollIndicator={false}
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={3}
+            removeClippedSubviews={true}
             contentContainerStyle={styles.productList}
             keyExtractor={(item, index) => item._id || `trending-${index}`}
             renderItem={({ item }) => (
@@ -379,6 +391,10 @@ const HomeScreen = ({ navigation }) => {
             data={displayRecommended}
             horizontal
             showsHorizontalScrollIndicator={false}
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={3}
+            removeClippedSubviews={true}
             contentContainerStyle={styles.productList}
             keyExtractor={(item, index) => item._id || `recommended-${index}`}
             renderItem={({ item }) => (

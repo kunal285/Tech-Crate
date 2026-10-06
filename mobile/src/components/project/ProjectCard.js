@@ -157,4 +157,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProjectCard;
+export default React.memo(ProjectCard);
