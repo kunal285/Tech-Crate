@@ -157,7 +157,7 @@ const LoginScreen = ({ navigation }) => {
               </View>
               <Text style={styles.logoText}>ProjectKart</Text>
             </View>
-            <Text style={styles.welcomeText}>Welcome Back 👋</Text>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
             <Text style={styles.subtitleText}>
               {step === 1 ? 'Login securely with Mobile Number & OTP' : 'Enter 6-digit verification code'}
             </Text>

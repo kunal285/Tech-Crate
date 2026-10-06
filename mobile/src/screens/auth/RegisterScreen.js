@@ -11,7 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Zap, Phone, User, GraduationCap, Building2, BookOpen } from 'lucide-react-native';
+import { Zap, Phone, User, GraduationCap, Building2, BookOpen, Mail } from 'lucide-react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -73,7 +73,7 @@ const RegisterScreen = ({ navigation }) => {
               </View>
               <Text style={styles.logoText}>ProjectKart</Text>
             </View>
-            <Text style={styles.titleText}>Create Account 🚀</Text>
+            <Text style={styles.titleText}>Create Account</Text>
             <Text style={styles.subtitleText}>
               Passwordless Mobile OTP Registration for Customers & Students
             </Text>
@@ -132,7 +132,7 @@ const RegisterScreen = ({ navigation }) => {
               keyboardType="email-address"
               autoCapitalize="none"
               error={errors.email}
-              leftIcon={<Text style={styles.icon}>✉️</Text>}
+              leftIcon={<Mail size={18} color={Colors.textMuted} />}
             />
 
             {accountType === 'student' && (

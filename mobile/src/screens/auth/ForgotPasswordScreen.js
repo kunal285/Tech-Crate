@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
 import {View, Text, StyleSheet, Alert, StatusBar} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {Mail, Lock} from 'lucide-react-native';
 import {Colors, Typography, Spacing} from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -35,7 +36,7 @@ const ForgotPasswordScreen = ({navigation}) => {
       <View style={styles.content}>
         {sent ? (
           <View style={styles.successContainer}>
-            <Text style={styles.successIcon}>📧</Text>
+            <Mail size={72} color={Colors.success} style={{marginBottom: Spacing.xl}} />
             <Text style={styles.successTitle}>Email Sent!</Text>
             <Text style={styles.successText}>
               We've sent a password reset link to{'\n'}{email}
@@ -52,7 +53,9 @@ const ForgotPasswordScreen = ({navigation}) => {
           </View>
         ) : (
           <>
-            <Text style={styles.icon}>🔐</Text>
+            <View style={{alignItems: 'center', marginBottom: Spacing.xl}}>
+              <Lock size={60} color={Colors.primary} />
+            </View>
             <Text style={styles.title}>Reset your password</Text>
             <Text style={styles.subtitle}>
               Enter your email address and we'll send you a link to reset your
@@ -66,7 +69,7 @@ const ForgotPasswordScreen = ({navigation}) => {
               keyboardType="email-address"
               autoCapitalize="none"
               error={error}
-              leftIcon={<Text style={styles.inputIcon}>✉️</Text>}
+              leftIcon={<Mail size={18} color={Colors.textMuted} />}
             />
             <Button
               title="Send Reset Link"

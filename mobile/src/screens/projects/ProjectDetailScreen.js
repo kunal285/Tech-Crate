@@ -96,7 +96,7 @@ export default function ProjectDetailScreen({ route, navigation }) {
               source={{ uri: project.circuitDiagramUrl || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80' }}
               style={styles.circuitImage}
             />
-            <Text style={styles.circuitNote}>💡 Ensure 3.3V / 5V voltage rails match component ratings before powering on.</Text>
+            <Text style={styles.circuitNote}>Ensure 3.3V / 5V voltage rails match component ratings before powering on.</Text>
           </View>
         )}
 
@@ -116,7 +116,7 @@ export default function ProjectDetailScreen({ route, navigation }) {
           <Text style={styles.kitPriceLabel}>Complete Project Kit</Text>
           <Text style={styles.kitPriceVal}>₹{project.price}</Text>
         </View>
-        <Button title="Buy Complete Kit 🚀" onPress={handleBuyKit} style={{ paddingHorizontal: 20 }} />
+        <Button title="Buy Complete Kit" onPress={handleBuyKit} style={{ paddingHorizontal: 20 }} />
       </View>
     </SafeAreaView>
   );

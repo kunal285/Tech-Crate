@@ -7,6 +7,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
+import {Zap} from 'lucide-react-native';
 import {Colors, Typography, Spacing} from '../../theme';
 import useAuthStore from '../../store/authStore';
 
@@ -70,7 +71,7 @@ const SplashScreen = ({navigation}) => {
           {opacity: fadeAnim, transform: [{scale: scaleAnim}]},
         ]}>
         <View style={styles.logoIcon}>
-          <Text style={styles.logoIconText}>⚡</Text>
+          <Zap size={48} color="#FFFFFF" />
         </View>
         <Text style={styles.logoText}>ProjectKart</Text>
       </Animated.View>

@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, Alert, StatusBar,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {User, Store, Landmark, Info, FileText} from 'lucide-react-native';
 import {Colors, Typography, Spacing, BorderRadius} from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -52,21 +53,12 @@ const RegisterSellerScreen = ({navigation}) => {
     setIsLoading(false);
     if (result.success) {
       Alert.alert(
-        'Application Submitted! 🎉',
+        'Application Submitted!',
         'Your seller application has been submitted for review. We will contact you within 2-3 business days.',
         [{text: 'OK', onPress: () => navigation.navigate('Login')}],
       );
     } else {
       Alert.alert('Error', result.message || 'Failed to submit application');
-    }
-  };
-
-  const icon = () => {
-    switch (step) {
-      case 1: return '👤';
-      case 2: return '🏪';
-      case 3: return '🏦';
-      default: return '';
     }
   };
 
@@ -92,7 +84,7 @@ const RegisterSellerScreen = ({navigation}) => {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.stepTitle}>
-            {icon()} {step === 1 ? 'Personal Info' : step === 2 ? 'Business Info' : 'Bank Details'}
+            {step === 1 ? 'Personal Info' : step === 2 ? 'Business Info' : 'Bank Details'}
           </Text>
 
           {step === 1 && (
@@ -120,14 +112,14 @@ const RegisterSellerScreen = ({navigation}) => {
           {step === 3 && (
             <>
               <View style={styles.infoBox}>
-                <Text style={styles.infoText}>💡 Your bank details are needed for payment settlements. All information is encrypted and secure.</Text>
+                <Text style={styles.infoText}>Your bank details are needed for payment settlements. All information is encrypted and secure.</Text>
               </View>
               <Input label="Account Holder Name" value={form.accountHolderName} onChangeText={v => updateForm('accountHolderName', v)} placeholder="As per bank records" />
               <Input label="Bank Account Number" value={form.bankAccount} onChangeText={v => updateForm('bankAccount', v)} placeholder="Account number" keyboardType="number-pad" />
               <Input label="IFSC Code" value={form.ifscCode} onChangeText={v => updateForm('ifscCode', v)} placeholder="SBIN0001234" autoCapitalize="characters" />
 
               <View style={styles.noteBox}>
-                <Text style={styles.noteTitle}>📋 Note</Text>
+                <Text style={styles.noteTitle}>Note</Text>
                 <Text style={styles.noteText}>Your account will be reviewed by our team within 2-3 business days. You'll receive an email notification once approved.</Text>
               </View>
 
@@ -136,7 +128,7 @@ const RegisterSellerScreen = ({navigation}) => {
           )}
 
           {step < 3 && (
-            <Button title="Next →" onPress={handleNext} fullWidth size="lg" style={styles.nextBtn} />
+            <Button title="Next" onPress={handleNext} fullWidth size="lg" style={styles.nextBtn} />
           )}
         </ScrollView>
       </KeyboardAvoidingView>
