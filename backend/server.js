@@ -96,6 +96,7 @@ app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/seller', require('./routes/sellerRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/upload', require('./routes/uploadRoutes'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
