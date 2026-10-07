@@ -114,6 +114,7 @@ app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/posters', require('./routes/posterRoutes'));
 app.use('/api/banners', require('./routes/posterRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/webhooks', require('./routes/paymentRoutes'));
 

@@ -4,6 +4,9 @@ const Order = require('../models/Order');
 const ProjectKit = require('../models/ProjectKit');
 const Seller = require('../models/Seller');
 const Poster = require('../models/Poster');
+const Notification = require('../models/Notification');
+const DeviceToken = require('../models/DeviceToken');
+const { admin, isFirebaseAdminConfigured } = require('../config/firebaseAdmin');
 const {
   liveCategories,
   liveCoupons,
@@ -14,7 +17,6 @@ const {
 let categoriesList = [...liveCategories];
 let couponsList = [...liveCoupons];
 let bannersList = [...liveBanners];
-let notificationsList = [];
 
 // @desc Get platform system analytics & stats directly from MongoDB
 // @route GET /api/admin/stats
@@ -305,13 +307,115 @@ const createBanner = async (req, res) => {
 
 // @desc Notifications management
 const getNotifications = async (req, res) => {
-  res.json(notificationsList);
+  try {
+    const notifications = await Notification.find().sort({ createdAt: -1 }).limit(100).lean();
+    res.json(notifications);
+  } catch (error) {
+    console.error('[AdminController] Error fetching notifications:', error);
+    res.status(500).json({ message: 'Failed to fetch notifications', error: error.message });
+  }
 };
 
 const sendNotification = async (req, res) => {
-  const newNotif = { _id: 'n_' + Date.now(), ...req.body, createdAt: new Date() };
-  notificationsList.unshift(newNotif);
-  res.status(201).json({ message: 'Notification broadcasted via FCM!', notification: newNotif });
+  try {
+    const { title, body, target = 'all', type = 'broadcast', data = {} } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({ message: 'Title and message body are required.' });
+    }
+
+    // 1. Save to MongoDB for persistent in-app notifications
+    const createdNotification = await Notification.create({
+      title: title.trim(),
+      body: body.trim(),
+      target,
+      type,
+      data,
+    });
+
+    // 2. Dispatch FCM Push Notifications if Firebase Admin is configured
+    let fcmResult = { sent: 0, failed: 0, skipped: false };
+
+    if (isFirebaseAdminConfigured() && admin && admin.messaging) {
+      try {
+        let tokenQuery = {};
+        if (target !== 'all') {
+          // Find users with matching target role
+          const targetUsers = await User.find({ role: target }).select('_id');
+          const userIds = targetUsers.map((u) => u._id);
+          tokenQuery = { user: { $in: userIds } };
+        }
+
+        const deviceTokens = await DeviceToken.find(tokenQuery).select('token');
+        const tokens = deviceTokens.map((dt) => dt.token).filter(Boolean);
+
+        if (tokens.length > 0) {
+          const payload = {
+            notification: {
+              title: title.trim(),
+              body: body.trim(),
+            },
+            data: {
+              notificationId: String(createdNotification._id),
+              type: String(type),
+              ...Object.keys(data).reduce((acc, k) => {
+                acc[k] = String(data[k]);
+                return acc;
+              }, {}),
+            },
+            tokens,
+          };
+
+          const response = await admin.messaging().sendEachForMulticast(payload);
+          fcmResult.sent = response.successCount;
+          fcmResult.failed = response.failureCount;
+
+          // Clean up invalid tokens
+          if (response.failureCount > 0) {
+            const staleTokens = [];
+            response.responses.forEach((resp, idx) => {
+              if (!resp.success) {
+                const errCode = resp.error?.code;
+                if (
+                  errCode === 'messaging/invalid-registration-token' ||
+                  errCode === 'messaging/registration-token-not-registered'
+                ) {
+                  staleTokens.push(tokens[idx]);
+                }
+              }
+            });
+            if (staleTokens.length > 0) {
+              await DeviceToken.deleteMany({ token: { $in: staleTokens } });
+            }
+          }
+        }
+      } catch (fcmErr) {
+        console.warn('[AdminController] FCM push dispatch error:', fcmErr.message);
+      }
+    } else {
+      fcmResult.skipped = true;
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Notification broadcasted and saved successfully!',
+      notification: createdNotification,
+      fcm: fcmResult,
+    });
+  } catch (error) {
+    console.error('[AdminController] Error sending notification:', error);
+    res.status(500).json({ message: 'Failed to broadcast notification', error: error.message });
+  }
+};
+
+const deleteNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Notification.findByIdAndDelete(id);
+    res.json({ success: true, message: 'Notification deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to delete notification', error: error.message });
+  }
 };
 
 // @desc Reviews management

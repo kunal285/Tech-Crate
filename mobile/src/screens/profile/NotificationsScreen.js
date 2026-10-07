@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,10 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Bell,
   Package,
@@ -15,42 +17,63 @@ import {
   Info,
   CheckCheck,
   Trash2,
-  ChevronRight,
+  Sparkles,
 } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import Button from '../../components/common/Button';
-import { Colors, STORAGE_KEYS } from '../../constants';
+import notificationService from '../../services/notificationService';
+
+const formatRelativeTime = (dateInput) => {
+  if (!dateInput) return 'Recently';
+  try {
+    const diffMs = Date.now() - new Date(dateInput).getTime();
+    if (isNaN(diffMs)) return String(dateInput);
+
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return new Date(dateInput).toLocaleDateString();
+  } catch {
+    return 'Recently';
+  }
+};
 
 export default function NotificationsScreen({ navigation }) {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 'notif_1',
-      title: 'Order Dispatched 🚚',
-      body: 'Your TechCrate package with Arduino Uno & Sensor Kit has been shipped via Express delivery.',
-      type: 'order',
-      date: '2 hours ago',
-      read: false,
-    },
-    {
-      id: 'notif_2',
-      title: 'Maker Weekend Deal: 15% OFF 🎉',
-      body: 'Use coupon code TECH10 on any IoT or Robotics hardware kit this weekend.',
-      type: 'promo',
-      date: '1 day ago',
-      read: false,
-    },
-    {
-      id: 'notif_3',
-      title: 'Welcome to TechCrate! ⚡',
-      body: 'Explore hardware components, verify microcontroller pinouts and build engineering projects.',
-      type: 'system',
-      date: '3 days ago',
-      read: true,
-    },
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const markAllAsRead = () => {
+  const loadNotifications = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const res = await notificationService.fetchNotifications();
+      if (res && res.notifications) {
+        setNotifications(res.notifications);
+      }
+    } catch (err) {
+      console.warn('[NotificationsScreen] Error loading notifications:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadNotifications();
+    }, [])
+  );
+
+  const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    await notificationService.markAsRead(null, true);
   };
 
   const clearAllNotifications = () => {
@@ -59,15 +82,31 @@ export default function NotificationsScreen({ navigation }) {
       'Are you sure you want to delete all notifications?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear All', style: 'destructive', onPress: () => setNotifications([]) },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            setNotifications([]);
+            await notificationService.clearNotifications(null, true);
+          },
+        },
       ]
     );
   };
 
-  const handleNotificationPress = (item) => {
+  const handleNotificationPress = async (item) => {
+    const itemId = item._id || item.id;
     setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
+      prev.map((n) => (n._id === itemId || n.id === itemId ? { ...n, read: true } : n))
     );
+
+    await notificationService.markAsRead(itemId, false);
+
+    if (item.data && Object.keys(item.data).length > 0) {
+      notificationService.handleNotificationNavigation(navigation, item.data);
+      return;
+    }
+
     if (item.type === 'order') {
       navigation.navigate('Orders');
     } else if (item.type === 'promo') {
@@ -81,31 +120,38 @@ export default function NotificationsScreen({ navigation }) {
         return <Package size={18} color="#0284C7" />;
       case 'promo':
         return <Tag size={18} color="#D97706" />;
+      case 'broadcast':
+        return <Sparkles size={18} color="#7C3AED" />;
       default:
         return <Info size={18} color="#059669" />;
     }
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.notifCard, !item.read && styles.notifCardUnread]}
-      activeOpacity={0.8}
-      onPress={() => handleNotificationPress(item)}
-      accessibilityLabel={item.title}
-    >
-      <View style={styles.iconCircle}>{getNotificationIcon(item.type)}</View>
-      <View style={styles.textCol}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.notifTitle, !item.read && styles.notifTitleBold]}>
-            {item.title}
-          </Text>
-          {!item.read && <View style={styles.unreadDot} />}
+  const renderItem = ({ item }) => {
+    const isUnread = !item.read;
+    const timeLabel = formatRelativeTime(item.createdAt || item.date);
+
+    return (
+      <TouchableOpacity
+        style={[styles.notifCard, isUnread && styles.notifCardUnread]}
+        activeOpacity={0.8}
+        onPress={() => handleNotificationPress(item)}
+        accessibilityLabel={item.title}
+      >
+        <View style={styles.iconCircle}>{getNotificationIcon(item.type)}</View>
+        <View style={styles.textCol}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.notifTitle, isUnread && styles.notifTitleBold]}>
+              {item.title}
+            </Text>
+            {isUnread && <View style={styles.unreadDot} />}
+          </View>
+          <Text style={styles.notifBody}>{item.body}</Text>
+          <Text style={styles.notifDate}>{timeLabel}</Text>
         </View>
-        <Text style={styles.notifBody}>{item.body}</Text>
-        <Text style={styles.notifDate}>{item.date}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -135,29 +181,43 @@ export default function NotificationsScreen({ navigation }) {
         }
       />
 
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <View style={styles.emptyIconCircle}>
-              <Bell size={44} color="#94A3B8" />
-            </View>
-            <Text style={styles.emptyTitle}>No Notifications</Text>
-            <Text style={styles.emptySubtitle}>
-              You're all caught up! Order tracking and promotional updates will appear here.
-            </Text>
-            <Button
-              title="Explore Store"
-              type="primary"
-              onPress={() => navigation.navigate('Home', { screen: 'HomeMain' })}
-              style={styles.emptyBtn}
+      {loading && !refreshing ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color="#0284C7" />
+          <Text style={styles.loadingText}>Fetching live notifications...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item, index) => item._id || item.id || `notif_${index}`}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadNotifications(true)}
+              colors={['#0284C7']}
             />
-          </View>
-        }
-      />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <View style={styles.emptyIconCircle}>
+                <Bell size={44} color="#94A3B8" />
+              </View>
+              <Text style={styles.emptyTitle}>No Notifications</Text>
+              <Text style={styles.emptySubtitle}>
+                You're all caught up! Order tracking, store updates, and announcements will appear here.
+              </Text>
+              <Button
+                title="Explore Store"
+                type="primary"
+                onPress={() => navigation.navigate('Home', { screen: 'HomeMain' })}
+                style={styles.emptyBtn}
+              />
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -166,6 +226,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  loadingBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
   },
   headerRight: {
     flexDirection: 'row',
@@ -179,6 +250,7 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     gap: 10,
+    flexGrow: 1,
   },
   notifCard: {
     flexDirection: 'row',

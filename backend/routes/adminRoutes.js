@@ -18,6 +18,7 @@ const {
   createBanner,
   getNotifications,
   sendNotification,
+  deleteNotification,
   getReviews,
   getPayments,
   getAuditLogs,
@@ -56,6 +57,7 @@ router.route('/banners').get(getBanners).post(createBanner);
 
 // Notifications
 router.route('/notifications').get(getNotifications).post(sendNotification);
+router.delete('/notifications/:id', deleteNotification);
 
 // Reviews & Payments
 router.get('/reviews', getReviews);
