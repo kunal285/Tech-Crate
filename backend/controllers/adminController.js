@@ -491,6 +491,7 @@ module.exports = {
   createBanner,
   getNotifications,
   sendNotification,
+  deleteNotification,
   getReviews,
   getPayments,
   getAuditLogs,
