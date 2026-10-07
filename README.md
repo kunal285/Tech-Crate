@@ -1,6 +1,6 @@
 # 🛒 Tech Crate - Full-Stack E-Commerce & Student Project Ecosystem
 
-Welcome to **Tech Crate**, an end-to-end e-commerce and engineering project platform comprising a high-performance **Node.js/Express REST API**, a modern **React + Vite Admin Control Panel**, and a **React Native Mobile App** tailored for students, makers, and customers.
+Welcome to **Tech Crate**, an end-to-end e-commerce and engineering project platform comprising a high-performance **Node.js/Express REST API**, a modern **React + Vite Admin Control Panel**, and a **React Native Mobile App** tailored for students, makers, and electronics enthusiasts.
 
 ---
 
@@ -46,16 +46,32 @@ Welcome to **Tech Crate**, an end-to-end e-commerce and engineering project plat
 
 ---
 
-### 4. 🔐 Dual Authentication & Security System
+### 4. 🔐 Multi-Factor Authentication & Verification
 - **Mobile-First Passwordless SMS OTP:**
   - Quick, frictionless sign-in using `+91 Mobile Number` + `6-Digit Cryptographic OTP`.
   - SHA-256 hashed storage in MongoDB with 5-minute auto-expiry via TTL indexes.
-  - Rate limiting with 30-second resend cooldowns and brute-force lockouts.
-- **Google Sign-In:**
-  - Integrated via `@react-native-google-signin/google-signin` and Firebase Authentication.
+  - Rate limiting with 30-second resend cooldowns, captcha verification (`CaptchaBox`), and brute-force lockouts.
+- **Firebase Authentication & Social Sign-In:**
+  - Integrated via `@react-native-google-signin/google-signin` and Firebase Authentication SDKs with server-side token validation.
 - **Strict Admin Portal Isolation:**
   - Isolated admin authentication route at `POST /api/auth/login`.
   - Admin accounts cannot be accessed via customer OTP routes; privilege escalation is blocked server-side.
+
+---
+
+### 5. 💳 Payments, Cart & Order Fulfillment
+- **Integrated Payment Gateway:** Payment controller integration supporting online transactions and checkout workflows.
+- **Cart & Wishlist Sync:** Real-time Zustand store synchronization for mobile cart and wishlist.
+- **Full Order Lifecycle Management:** Complete tracking from `Pending` -> `Processing` -> `Shipped` -> `Delivered` / `Cancelled`.
+
+---
+
+### 6. 🛡️ Enterprise Security, Audit & Observability
+- **Zod Schema Validation:** Runtime input validation middleware protecting API parameters.
+- **Audit Logging Service:** Tracks security events, admin actions, and authentication attempts (`AuditLog`).
+- **Error Tracking & Telemetry:** Sentry instrumentation for exception capturing and performance monitoring.
+- **Dual Database Architecture Support:** MongoDB Mongoose schemas alongside relational SQL schema for Supabase deployment (`supabase_schema.sql`).
+- **OpenAPI 3.0 Documentation:** Interactive API documentation schema defined in `backend/docs/openapi.json`.
 
 ---
 
@@ -77,12 +93,16 @@ For accessing the Admin Web Panel:
 ```text
 TechCrate/
 ├── backend/                  # Node.js + Express REST API Server
-│   ├── config/               # DB, Cloudinary, and Firebase configuration
-│   ├── controllers/          # Controllers (auth, product, poster, order, admin)
-│   ├── middleware/           # WAF, JWT authorization, rate limiters, upload
-│   ├── models/               # Mongoose schemas (Product, Poster, User, Order)
-│   ├── routes/               # API route definitions (/api/products, /api/posters, etc.)
-│   ├── scripts/              # DB maintenance and cleanup scripts
+│   ├── config/               # DB, Cloudinary, Firebase, and Sentry configuration
+│   ├── controllers/          # Controllers (auth, product, poster, order, payment, admin)
+│   ├── database/             # Relational schemas (supabase_schema.sql)
+│   ├── docs/                 # OpenAPI 3.0 specification (openapi.json)
+│   ├── middleware/           # WAF, JWT authorization, rate limiters, Zod validation
+│   ├── models/               # Mongoose schemas (Product, Poster, User, Order, AuditLog, Coupon)
+│   ├── routes/               # API route definitions (/api/products, /api/posters, /api/payments, etc.)
+│   ├── scripts/              # Security and ecommerce audit test suites & seeding scripts
+│   ├── services/             # Audit, Cache, Queue, and Email services
+│   ├── validators/           # Zod schema definitions
 │   └── server.js             # Main server entrypoint
 │
 ├── admin/                    # React 18 + Vite Web Management Panel
@@ -93,20 +113,25 @@ TechCrate/
 │   │   │   ├── products/     # AddProduct, EditProduct, Product Catalog
 │   │   │   ├── posters/      # PosterManager, PosterForm (Custom Text & CTA)
 │   │   │   ├── orders/       # Order tracking and fulfillment
+│   │   │   ├── users/        # User management & details
 │   │   │   └── DashboardPage.jsx # Analytics & KPI metrics
 │   │   └── services/         # Axios API clients
 │   └── vite.config.js        # Vite build configuration
 │
 └── mobile/                   # React Native Mobile App (Tech Crate)
     ├── android/              # Native Android project configuration
+    ├── ios/                  # Native iOS project configuration
     ├── src/
-    │   ├── components/       # PosterCarousel, SafeImage, ProductCard
-    │   ├── navigation/       # React Navigation stack & bottom tabs
+    │   ├── components/       # PosterCarousel, SafeImage, ProductCard, CaptchaBox
+    │   ├── navigation/       # React Navigation stack (Customer, Admin, Seller)
     │   ├── screens/
     │   │   ├── auth/         # LoginScreen (OTP & Google), RegisterScreen
     │   │   ├── home/         # HomeScreen with Carousel & Dynamic Greeting
+    │   │   ├── cart/         # CartScreen & CheckoutScreen
+    │   │   ├── orders/       # OrderHistoryScreen & OrderDetailsScreen
     │   │   └── products/     # ProductDetailScreen with 4-image gallery & features
-    │   ├── services/         # Mobile API client
+    │   ├── services/         # API, Auth, Payment, Poster, and Firebase clients
+    │   ├── store/            # Zustand state stores (auth, cart, poster, product, wishlist)
     │   └── theme/            # Brand typography & color palette
     └── App.jsx               # Application root
 ```
@@ -117,7 +142,7 @@ TechCrate/
 
 ### Prerequisites
 - **Node.js**: v18.x or v20.x
-- **MongoDB**: Local MongoDB instance (`mongodb://127.0.0.1:27017/TechCrate`) or Atlas URI
+- **MongoDB**: Local MongoDB instance (`mongodb://127.0.0.1:27017/TechCrate`) or MongoDB Atlas URI
 - **React Native Environment**: Android Studio with SDK 34 / emulator or physical device configured
 
 ---
@@ -138,6 +163,7 @@ JWT_SECRET=your_super_secret_jwt_key
 CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
 CLOUDINARY_API_KEY=your_cloudinary_api_key
 CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+SENTRY_DSN=your_sentry_dsn
 ```
 
 Start the backend server:
@@ -205,6 +231,8 @@ npm run android
 | `POST` | `/api/posters` | Create new poster with custom text & CTA | **Admin** |
 | `PUT` | `/api/posters/:id` | Update poster metadata or toggle status | **Admin** |
 | `DELETE` | `/api/posters/:id` | Remove poster | **Admin** |
+| `POST` | `/api/payments/create-order` | Initialize payment order | **User** |
+| `POST` | `/api/payments/verify` | Verify transaction signature | **User** |
 
 ---
 
@@ -212,10 +240,12 @@ npm run android
 
 | Component | Safeguard Implementation |
 | :--- | :--- |
-| **Authentication** | Cryptographic OTP hashing, short-lived JWT tokens, isolated admin portal. |
-| **Data Protection** | Sensitive credentials are never exposed in responses or stored in plaintext. |
+| **Authentication** | Cryptographic OTP hashing, short-lived JWT tokens, isolated admin portal, Firebase Auth. |
+| **Data Protection** | Sensitive credentials are never exposed in responses or stored in plaintext. Audit logs track security events. |
+| **Input Validation** | Zod middleware validation schemas on API payloads (`zodValidation`). |
 | **Injection Defense** | `helmet` for secure headers, `express-mongo-sanitize` to block NoSQL injection, and `xss-clean` for input sanitization. |
-| **Rate Limiting** | Endpoint throttling against automated abuse and brute-force attacks via `express-rate-limit`. |
+| **Rate Limiting** | Endpoint throttling against automated abuse and brute-force attacks via `express-rate-limit` with captcha checks. |
+| **Audit & Testing** | Comprehensive security test suite (`test_security_suite.js`) & full ecommerce audit (`test_full_ecommerce_audit.js`). |
 
 ---
 
