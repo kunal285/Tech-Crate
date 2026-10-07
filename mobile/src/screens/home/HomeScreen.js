@@ -160,10 +160,10 @@ const getCategoryIcon = id => {
 const StatsRow = () => (
   <View style={styles.statsRow}>
     {[
-      { IconComp: Package, value: '1000+', label: 'Products' },
-      { IconComp: Cpu, value: '50+', label: 'Projects' },
-      { IconComp: Rocket, value: '10K+', label: 'Students' },
-      { IconComp: Star, value: '4.8', label: 'Rating' },
+      { IconComp: Package, value: '350+', label: 'Products' },
+      { IconComp: Cpu, value: '10+', label: 'Projects' },
+      { IconComp: Rocket, value: '1K+', label: 'Students' },
+      { IconComp: Star, value: '4.3', label: 'Rating' },
     ].map((stat, i) => (
       <View key={i} style={styles.statCard}>
         <stat.IconComp size={18} color={BRAND.primaryNavy} style={styles.statIcon} />
