@@ -443,9 +443,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   logoImage: {
-    width: 44,
-    height: 44,
-    marginRight: Spacing.sm,
+    width: 200,
+    height: 100,
+    marginRight: Spacing.sm + 2,
   },
   logoTitle: {
     fontSize: Typography.fontSize.xl,
