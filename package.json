@@ -4,7 +4,7 @@
   "private": true,
   "description": "TechCrate — Full-Stack AI-Powered Student & Maker E-Commerce Platform",
   "scripts": {
-    "build": "npm --prefix admin run build",
+    "build": "echo 'Backend ready - no build step required'",
     "start:backend": "npm --prefix backend start",
     "dev:backend": "npm --prefix backend run dev",
     "start:admin": "npm --prefix admin run dev",
