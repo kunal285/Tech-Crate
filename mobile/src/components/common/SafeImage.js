@@ -9,7 +9,7 @@ const SafeImage = ({
   style,
   resizeMode = 'cover',
   placeholderIcon: PlaceholderIcon = Cpu,
-  placeholderText = 'ProjectKart',
+  placeholderText = 'Tech Crate',
   containerStyle,
 }) => {
   const [loading, setLoading] = useState(true);

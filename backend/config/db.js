@@ -10,29 +10,64 @@ const {
   liveProducts,
   liveProjectKits,
   liveOrders,
+  liveCategories,
+  liveCoupons,
+  liveBanners,
 } = require('../scripts/liveSeedData');
+
+const Poster = require('../models/Poster');
+const Coupon = require('../models/Coupon');
+const Category = require('../models/Category');
+const Cart = require('../models/Cart');
+const Wishlist = require('../models/Wishlist');
 
 const populateLiveData = async () => {
   try {
     const userCount = await User.countDocuments();
     if (userCount === 0) {
-      console.log('[Live DB] Populating live hardware catalog, users & project kits into MongoDB...');
+      console.log('[Live DB] Initializing user authentication accounts with passwords...');
       await User.insertMany(liveUsers);
-      await Seller.insertMany(liveSellers);
-      await Product.insertMany(liveProducts);
-      await ProjectKit.insertMany(liveProjectKits);
-      await Order.insertMany(liveOrders);
-      console.log('[Live DB] Success: Live dataset ready in MongoDB database!');
+      if (liveSellers && liveSellers.length > 0) {
+        await Seller.insertMany(liveSellers);
+      }
+      console.log('[Live DB] User accounts created successfully.');
     } else {
-      console.log(`[Live DB] Database active with ${userCount} users & live records.`);
+      console.log(`[Live DB] Database active with ${userCount} users.`);
+    }
+
+    const productCount = await Product.countDocuments();
+    if (productCount === 0 && liveProducts.length > 0) {
+      await Product.insertMany(liveProducts);
+      console.log(`[Live DB] Seeded ${liveProducts.length} authentic hardware components.`);
+    } else {
+      console.log(`[Live DB] Catalog active with ${productCount} components.`);
+    }
+
+    const posterCount = await Poster.countDocuments();
+    if (posterCount === 0 && liveBanners && liveBanners.length > 0) {
+      await Poster.insertMany(liveBanners);
+      console.log(`[Live DB] Seeded ${liveBanners.length} promotional posters.`);
+    }
+
+    const couponCount = await Coupon.countDocuments();
+    if (couponCount === 0 && liveCoupons && liveCoupons.length > 0) {
+      await Coupon.insertMany(liveCoupons);
+      console.log(`[Live DB] Seeded ${liveCoupons.length} promotional coupons.`);
+    }
+
+    const categoryCount = await Category.countDocuments();
+    if (categoryCount === 0 && liveCategories && liveCategories.length > 0) {
+      const catsToInsert = liveCategories.map(({ _id, ...c }) => c);
+      await Category.insertMany(catsToInsert);
+      console.log(`[Live DB] Seeded ${catsToInsert.length} hardware categories.`);
     }
   } catch (err) {
-    console.error('[Live DB Seeding Warning]', err.message);
+    console.error('[Live DB Warning]', err.message);
   }
 };
 
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/projectkart';
+  const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/TechCrate';
 
   try {
     const conn = await mongoose.connect(uri, {

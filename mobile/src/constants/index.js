@@ -1,7 +1,14 @@
+import {Platform} from 'react-native';
+
 // API Configuration
+const envApiUrl =
+  (typeof process !== 'undefined' && process.env && (process.env.EXPO_PUBLIC_API_URL || process.env.API_BASE_URL)) ||
+  null;
+
 export const API_BASE_URL =
-  (typeof process !== 'undefined' && process.env && process.env.API_BASE_URL) ||
-  'http://10.0.2.2:5000/api';
+  envApiUrl ||
+  (Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api');
+
 export const API_TIMEOUT = 30000;
 
 // App Constants
@@ -13,11 +20,13 @@ export const APP_VERSION = '1.0.0';
 export const STORAGE_KEYS = {
   AUTH_TOKEN: '@techcrate/auth_token',
   REFRESH_TOKEN: '@techcrate/refresh_token',
+  DEVICE_TOKEN: '@techcrate/device_token',
   USER_DATA: '@techcrate/user_data',
   CART_DATA: '@techcrate/cart_data',
   WISHLIST_DATA: '@techcrate/wishlist_data',
   ONBOARDING_DONE: '@techcrate/onboarding_done',
   SEARCH_HISTORY: '@techcrate/search_history',
+  NOTIFICATIONS: '@techcrate/notifications',
 };
 
 // User Roles

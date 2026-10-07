@@ -1,4 +1,4 @@
-package com.projectkart
+package com.TechCrate
 
 import android.app.Application
 import com.facebook.react.PackageList

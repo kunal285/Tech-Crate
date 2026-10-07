@@ -16,7 +16,7 @@ const {
 dotenv.config();
 
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/projectkart';
+  const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/TechCrate';
   try {
     await mongoose.connect(uri, { serverSelectionTimeoutMS: 2000 });
     console.log('[Seed] Database connected successfully to', uri);
@@ -42,21 +42,19 @@ const seedData = async () => {
     console.log('[Seed] Cleared existing collection data.');
 
     await User.insertMany(liveUsers);
-    console.log(`[Seed] Inserted ${liveUsers.length} live users.`);
+    console.log(`[Seed] Inserted ${liveUsers.length} user accounts with credentials.`);
 
-    await Seller.insertMany(liveSellers);
-    console.log(`[Seed] Inserted ${liveSellers.length} verified sellers.`);
+    if (liveSellers.length > 0) {
+      await Seller.insertMany(liveSellers);
+      console.log(`[Seed] Inserted ${liveSellers.length} verified sellers.`);
+    }
 
-    await Product.insertMany(liveProducts);
-    console.log(`[Seed] Inserted ${liveProducts.length} authentic hardware products.`);
+    if (liveProducts.length > 0) {
+      await Product.insertMany(liveProducts);
+      console.log(`[Seed] Inserted ${liveProducts.length} authentic hardware components.`);
+    }
 
-    await ProjectKit.insertMany(liveProjectKits);
-    console.log(`[Seed] Inserted ${liveProjectKits.length} DIY engineering project kits.`);
-
-    await Order.insertMany(liveOrders);
-    console.log(`[Seed] Inserted ${liveOrders.length} live customer orders.`);
-
-    console.log('[Seed Success] All live hardware & project records inserted successfully!');
+    console.log('[Seed Success] All dummy data cleared. User ID and passwords preserved!');
     process.exit(0);
   } catch (error) {
     console.error('[Seed Fatal Error]', error);

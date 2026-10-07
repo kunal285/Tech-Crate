@@ -16,16 +16,22 @@ const useProductStore = create((set, get) => ({
   activeFilters: {},
   searchQuery: '',
 
+  isLoadingTrending: false,
+  trendingError: null,
+  isLoadingRecommended: false,
+  recommendedError: null,
+
   // Fetch products
   fetchProducts: async (params = {}, append = false) => {
     set({isLoading: true, error: null});
     const result = await productService.getProducts(params);
     if (result.success) {
+      const items = Array.isArray(result.data)
+        ? result.data
+        : (result.data?.products || []);
       set(state => ({
-        products: append
-          ? [...state.products, ...(result.data.products || [])]
-          : result.data.products || [],
-        pagination: result.data.pagination || state.pagination,
+        products: append ? [...state.products, ...items] : items,
+        pagination: result.data?.pagination || state.pagination,
         isLoading: false,
       }));
     } else {
@@ -36,18 +42,32 @@ const useProductStore = create((set, get) => ({
 
   // Fetch trending products
   fetchTrending: async () => {
+    set({isLoadingTrending: true, trendingError: null});
     const result = await productService.getTrending(10);
     if (result.success) {
-      set({trending: result.data.products || []});
+      const items = Array.isArray(result.data)
+        ? result.data
+        : (result.data?.products || []);
+      set({trending: items, isLoadingTrending: false});
+    } else {
+      set({trendingError: result.message, isLoadingTrending: false});
     }
+    return result;
   },
 
   // Fetch recommended
   fetchRecommended: async () => {
+    set({isLoadingRecommended: true, recommendedError: null});
     const result = await productService.getRecommended(10);
     if (result.success) {
-      set({recommended: result.data.products || []});
+      const items = Array.isArray(result.data)
+        ? result.data
+        : (result.data?.products || []);
+      set({recommended: items, isLoadingRecommended: false});
+    } else {
+      set({recommendedError: result.message, isLoadingRecommended: false});
     }
+    return result;
   },
 
   // Fetch single product

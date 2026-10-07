@@ -13,16 +13,20 @@ const projectService = {
 
   // Get project kits
   getProjectKits: async (params = {}) => {
-    return await apiGet('/project-kits', params);
+    return await apiGet('/projects', params);
   },
 
   // Get single project kit
   getProjectKit: async id => {
-    return await apiGet(`/project-kits/${id}`);
+    return await apiGet(`/projects/${id}`);
   },
 
   // Featured project kits
   getFeaturedKits: async (limit = 6) => {
+    const res = await apiGet('/projects');
+    if (res.success && Array.isArray(res.data)) {
+      return {success: true, data: {kits: res.data.slice(0, limit)}};
+    }
     return await apiGet('/project-kits/featured', {limit});
   },
 

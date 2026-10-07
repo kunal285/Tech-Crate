@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,6 @@ import {
   Cpu,
   Wrench,
   ChevronRight,
-  Flame,
   Wifi,
   Radio,
   Eye,
@@ -33,6 +32,7 @@ import {
   Monitor,
   Hammer,
   Layers,
+  AlertCircle,
 } from 'lucide-react-native';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme';
 import { CATEGORIES } from '../../constants';
@@ -41,25 +41,278 @@ import useProductStore from '../../store/productStore';
 import useProjectStore from '../../store/projectStore';
 import useCartStore from '../../store/cartStore';
 import useWishlistStore from '../../store/wishlistStore';
+import usePosterStore from '../../store/posterStore';
 import ProductCard from '../../components/product/ProductCard';
 import ProjectCard from '../../components/project/ProjectCard';
+import PosterCarousel from '../../components/home/PosterCarousel';
 
-const BANNER_HEIGHT = 190;
+// Brand Color Palette
+const BRAND = {
+  primaryNavy: '#032762',
+  secondaryBlue: '#034697',
+  blue: '#0262B8',
+  cyan: '#02C9CC',
+  brightCyan: '#03E0E4',
+  white: '#FFFFFF',
+  darkNavy: '#061A3A',
+  accentOrange: '#F97316',
+};
+
+// ============================================================================
+// Skeleton & Placeholder Components
+// ============================================================================
+
+const ProductCardSkeleton = () => (
+  <View style={styles.productSkeleton}>
+    <View style={styles.skeletonImage} />
+    <View style={styles.skeletonContent}>
+      <View style={[styles.skeletonLine, { width: '40%', height: 8, marginBottom: 6 }]} />
+      <View style={[styles.skeletonLine, { width: '85%', height: 12, marginBottom: 4 }]} />
+      <View style={[styles.skeletonLine, { width: '65%', height: 12, marginBottom: 8 }]} />
+      <View style={[styles.skeletonLine, { width: '50%', height: 14, marginBottom: 8 }]} />
+      <View style={[styles.skeletonLine, { width: '100%', height: 28, borderRadius: 6 }]} />
+    </View>
+  </View>
+);
+
+const ProjectKitSkeleton = () => (
+  <View style={styles.kitSkeleton}>
+    <View style={styles.kitSkeletonImage} />
+    <View style={styles.skeletonContent}>
+      <View style={[styles.skeletonLine, { width: '35%', height: 8, marginBottom: 6 }]} />
+      <View style={[styles.skeletonLine, { width: '80%', height: 14, marginBottom: 6 }]} />
+      <View style={[styles.skeletonLine, { width: '95%', height: 10, marginBottom: 4 }]} />
+      <View style={[styles.skeletonLine, { width: '70%', height: 10, marginBottom: 10 }]} />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={[styles.skeletonLine, { width: '35%', height: 16 }]} />
+        <View style={[styles.skeletonLine, { width: '40%', height: 26, borderRadius: 6 }]} />
+      </View>
+    </View>
+  </View>
+);
+
+const SectionEmptyState = ({ message, onRetry }) => (
+  <View style={styles.emptyContainer}>
+    <Package size={26} color="#94A3B8" style={{ marginBottom: 6 }} />
+    <Text style={styles.emptyText}>{message}</Text>
+    {onRetry && (
+      <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
+        <Text style={styles.retryBtnText}>Refresh</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+const SectionErrorState = ({ message, onRetry }) => (
+  <View style={styles.errorContainer}>
+    <AlertCircle size={22} color="#EF4444" style={{ marginBottom: 4 }} />
+    <Text style={styles.errorText}>{message || 'Unable to load items'}</Text>
+    {onRetry && (
+      <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
+        <Text style={styles.retryBtnText}>Try Again</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'Morning';
+  if (h >= 12 && h < 17) return 'Afternoon';
+  if (h >= 17 && h < 21) return 'Evening';
+  return 'Night';
+};
+
+const getCategoryIcon = id => {
+  const map = {
+    arduino: Cpu,
+    esp32: Wifi,
+    esp8266: Radio,
+    'raspberry-pi': Cpu,
+    sensors: Eye,
+    robotics: Bot,
+    iot: Globe,
+    embedded: Database,
+    motors: Wrench,
+    displays: Monitor,
+    communication: Radio,
+    'dev-boards': Cpu,
+    pcbs: Layers,
+    power: Zap,
+    components: Package,
+    'project-kits': Package,
+    'diy-kits': Hammer,
+    tools: Wrench,
+    modules: Cpu,
+    accessories: Package,
+  };
+  return map[id] || Zap;
+};
+
+// ============================================================================
+// Top-Level Subcomponents
+// ============================================================================
+
+const StatsRow = () => (
+  <View style={styles.statsRow}>
+    {[
+      { IconComp: Package, value: '1000+', label: 'Products' },
+      { IconComp: Cpu, value: '50+', label: 'Projects' },
+      { IconComp: Rocket, value: '10K+', label: 'Students' },
+      { IconComp: Star, value: '4.8', label: 'Rating' },
+    ].map((stat, i) => (
+      <View key={i} style={styles.statCard}>
+        <stat.IconComp size={18} color={BRAND.primaryNavy} style={styles.statIcon} />
+        <Text style={styles.statValue} numberOfLines={1}>
+          {stat.value}
+        </Text>
+        <Text style={styles.statLabel} numberOfLines={1}>
+          {stat.label}
+        </Text>
+      </View>
+    ))}
+  </View>
+);
+
+const SectionHeader = ({ title, subtitle, onSeeAll }) => (
+  <View style={styles.sectionHeader}>
+    <View style={styles.sectionHeaderTitleCol}>
+      <Text style={styles.sectionTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      {subtitle && (
+        <Text style={styles.sectionSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      )}
+    </View>
+    {onSeeAll && (
+      <TouchableOpacity
+        onPress={onSeeAll}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={styles.seeAllBtn}>
+        <Text style={styles.seeAll}>See All</Text>
+        <ChevronRight size={13} color={BRAND.primaryNavy} />
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+const CategoryCard = ({ category, onPress }) => {
+  const IconComponent = getCategoryIcon(category.id);
+  return (
+    <TouchableOpacity
+      style={styles.categoryCard}
+      onPress={onPress}
+      activeOpacity={0.75}>
+      <View
+        style={[
+          styles.categoryIcon,
+          { backgroundColor: (category.color || BRAND.primaryNavy) + '15' },
+        ]}>
+        <IconComponent size={22} color={category.color || BRAND.primaryNavy} />
+      </View>
+      <Text style={styles.categoryName} numberOfLines={1}>
+        {category.name}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const AIBanner = ({ onPress }) => (
+  <TouchableOpacity
+    style={styles.aiBanner}
+    onPress={onPress}
+    activeOpacity={0.88}>
+    <View style={styles.aiBannerLeft}>
+      <View style={styles.aiLabelRow}>
+        <Sparkles size={14} color={BRAND.accentOrange} />
+        <Text style={styles.aiLabel}>AI Shopping Assistant</Text>
+      </View>
+      <Text style={styles.aiTitle}>Tell me your project!</Text>
+      <Text style={styles.aiDesc}>
+        Get component suggestions & budget estimates
+      </Text>
+    </View>
+    <View style={styles.aiBannerRight}>
+      <View style={styles.botCircle}>
+        <Bot size={28} color="#FFFFFF" />
+      </View>
+    </View>
+  </TouchableOpacity>
+);
+
+const BuilderBanner = ({ onPress }) => (
+  <TouchableOpacity
+    style={styles.builderBanner}
+    onPress={onPress}
+    activeOpacity={0.88}>
+    <View style={styles.builderIconCircle}>
+      <Wrench size={22} color={BRAND.accentOrange} />
+    </View>
+    <View style={styles.builderContent}>
+      <Text style={styles.builderTitle}>Build Your Project</Text>
+      <Text style={styles.builderDesc}>Step-by-step project configurator</Text>
+    </View>
+    <ChevronRight size={20} color={BRAND.accentOrange} />
+  </TouchableOpacity>
+);
+
+// ============================================================================
+// Main Home Screen
+// ============================================================================
 
 const HomeScreen = ({ navigation }) => {
-  const { user } = useAuthStore();
-  const { trending, recommended, fetchTrending, fetchRecommended } = useProductStore();
-  const { featuredKits, fetchFeaturedKits } = useProjectStore();
+  const user = useAuthStore(state => state.user);
+  const {
+    trending,
+    recommended,
+    isLoadingTrending,
+    trendingError,
+    isLoadingRecommended,
+    recommendedError,
+    fetchTrending,
+    fetchRecommended,
+  } = useProductStore();
+
+  const {
+    featuredKits,
+    isLoadingFeatured,
+    featuredError,
+    fetchFeaturedKits,
+  } = useProjectStore();
+
   const cartCount = useCartStore(state => state.getItemCount());
   const wishlistCount = useWishlistStore(state => state.getCount());
   const fetchCart = useCartStore(state => state.fetchCart);
   const fetchWishlist = useWishlistStore(state => state.fetchWishlist);
 
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    posters,
+    isLoading: isLoadingPosters,
+    fetchPosters,
+  } = usePosterStore();
 
-  const loadData = React.useCallback(async () => {
+  const [refreshing, setRefreshing] = useState(false);
+  const [greeting, setGreeting] = useState(getGreeting);
+
+  // Keep greeting dynamically updated in real time
+  useEffect(() => {
+    setGreeting(getGreeting());
+    const interval = setInterval(() => {
+      setGreeting(getGreeting());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadData = useCallback(async () => {
     try {
-      await Promise.all([
+      await Promise.allSettled([
+        fetchPosters(),
         fetchTrending(),
         fetchRecommended(),
         fetchFeaturedKits(),
@@ -67,9 +320,9 @@ const HomeScreen = ({ navigation }) => {
         fetchWishlist(),
       ]);
     } catch (err) {
-      console.log('Home screen load data error:', err);
+      console.warn('[Home Screen Load Error]', err);
     }
-  }, [fetchTrending, fetchRecommended, fetchFeaturedKits, fetchCart, fetchWishlist]);
+  }, [fetchPosters, fetchTrending, fetchRecommended, fetchFeaturedKits, fetchCart, fetchWishlist]);
 
   useEffect(() => {
     loadData();
@@ -82,138 +335,14 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const navigateToProduct = product => {
-    if (!product) return;
+    if (!product?._id) return;
     navigation.navigate('ProductDetail', { productId: product._id, product });
   };
 
   const navigateToCategory = category => {
-    if (!category) return;
+    if (!category?.id) return;
     navigation.navigate('Category', { categoryId: category.id, categoryName: category.name });
   };
-
-  // Hero Banner
-  const HeroBanner = () => (
-    <View style={styles.hero}>
-      <View style={styles.heroBg} />
-      <View style={styles.heroContent}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-          <Flame size={14} color={Colors.secondary || '#F97316'} />
-          <Text style={styles.heroTag}>New Arrivals</Text>
-        </View>
-        <Text style={styles.heroTitle}>Build. Learn.{'\n'}Create.</Text>
-        <Text style={styles.heroSubtitle}>
-          Everything you need for your next engineering project.
-        </Text>
-        <View style={styles.heroButtons}>
-          <TouchableOpacity
-            style={styles.heroPrimaryBtn}
-            onPress={() => navigation.navigate('Search')}>
-            <Text style={styles.heroPrimaryText}>Explore Products</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.heroSecondaryBtn}
-            onPress={() => navigation.navigate('Projects')}>
-            <Text style={styles.heroSecondaryText}>Project Kits</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View style={styles.heroDecor1} />
-      <View style={styles.heroDecor2} />
-      <View style={styles.heroEmojiContainer}>
-        <Cpu size={56} color="#FFFFFF" opacity={0.15} />
-      </View>
-    </View>
-  );
-
-  // Stats Row
-  const StatsRow = () => (
-    <View style={styles.statsRow}>
-      {[
-        { IconComp: Package, value: '1000+', label: 'Products' },
-        { IconComp: Cpu, value: '50+', label: 'Projects' },
-        { IconComp: Rocket, value: '10K+', label: 'Students' },
-        { IconComp: Star, value: '4.8', label: 'Rating' },
-      ].map((stat, i) => (
-        <View key={i} style={styles.statCard}>
-          <stat.IconComp size={18} color={Colors.primary || '#1E3A5F'} style={{ marginBottom: 4 }} />
-          <Text style={styles.statValue}>{stat.value}</Text>
-          <Text style={styles.statLabel}>{stat.label}</Text>
-        </View>
-      ))}
-    </View>
-  );
-
-  // Section Header
-  const SectionHeader = ({ title, subtitle, onSeeAll }) => (
-    <View style={styles.sectionHeader}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
-      </View>
-      {onSeeAll && (
-        <TouchableOpacity
-          onPress={onSeeAll}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={styles.seeAll}>See All </Text>
-          <ChevronRight size={14} color={Colors.primary} />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  // Category Card
-  const CategoryCard = ({ category }) => {
-    const IconComponent = getCategoryIcon(category.id);
-    return (
-      <TouchableOpacity
-        style={styles.categoryCard}
-        onPress={() => navigateToCategory(category)}
-        activeOpacity={0.8}>
-        <View style={[styles.categoryIcon, { backgroundColor: (category.color || Colors.primary) + '18' }]}>
-          <IconComponent size={22} color={category.color || Colors.primary} />
-        </View>
-        <Text style={styles.categoryName} numberOfLines={2}>
-          {category.name}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  // AI Assistant Banner
-  const AIBanner = () => (
-    <TouchableOpacity
-      style={styles.aiBanner}
-      onPress={() => navigation.navigate('AIAssistant')}
-      activeOpacity={0.9}>
-      <View style={styles.aiBannerLeft}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <Sparkles size={14} color={Colors.secondary} />
-          <Text style={styles.aiLabel}>AI Shopping Assistant</Text>
-        </View>
-        <Text style={styles.aiTitle}>Tell me your project!</Text>
-        <Text style={styles.aiDesc}>Get component suggestions & budget estimates</Text>
-      </View>
-      <View style={styles.aiBannerRight}>
-        <Bot size={40} color="#FFFFFF" />
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Project Builder Banner
-  const BuilderBanner = () => (
-    <TouchableOpacity
-      style={styles.builderBanner}
-      onPress={() => navigation.navigate('Projects', { screen: 'ProjectBuilder' })}
-      activeOpacity={0.9}>
-      <Wrench size={26} color={Colors.secondary || '#F97316'} style={{ marginRight: 10 }} />
-      <View style={styles.builderContent}>
-        <Text style={styles.builderTitle}>Build Your Project</Text>
-        <Text style={styles.builderDesc}>Step-by-step project configurator</Text>
-      </View>
-      <ChevronRight size={20} color={Colors.secondary || '#F97316'} />
-    </TouchableOpacity>
-  );
 
   const displayTrending = trending || [];
   const displayRecommended = recommended || [];
@@ -221,46 +350,58 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Top App Bar */}
       <View style={styles.appBar}>
         <View style={styles.appBarLeft}>
           <Image
             source={require('../../assets/images/logo.png')}
-            style={{ width: 36, height: 36, marginRight: 10 }}
+            style={styles.logoImage}
             resizeMode="contain"
           />
-          <View>
-            <Text style={styles.greeting}>
-              Good {getGreeting()}, {user?.name?.split(' ')[0] || 'Maker'}!
+          <View style={styles.titleColumn}>
+            <Text style={styles.greeting} numberOfLines={1}>
+              Good {greeting}, {user?.name?.split(' ')[0] || 'Maker'}!
             </Text>
-            <Text style={styles.logoFull}>Tech Crate</Text>
+            <Text style={styles.logoFull} numberOfLines={1}>
+              Tech Crate
+            </Text>
           </View>
         </View>
         <View style={styles.appBarRight}>
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={() => navigation.navigate('AIAssistant')}>
-            <Bot size={18} color={Colors.primary} />
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => navigation.navigate('AIAssistant')}
+            activeOpacity={0.75}>
+            <Bot size={20} color={BRAND.primaryNavy} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={() => navigation.navigate('Profile', { screen: 'Wishlist' })}>
-            <Heart size={18} color={Colors.textPrimary} />
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => navigation.navigate('Profile', { screen: 'Wishlist' })}
+            activeOpacity={0.75}>
+            <Heart size={20} color="#0F172A" />
             {wishlistCount > 0 && (
               <View style={styles.badgeSmall}>
-                <Text style={styles.badgeSmallText}>{wishlistCount}</Text>
+                <Text style={styles.badgeSmallText}>
+                  {wishlistCount > 99 ? '99+' : wishlistCount}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={() => navigation.navigate('Cart')}>
-            <ShoppingCart size={18} color={Colors.textPrimary} />
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => navigation.navigate('Cart')}
+            activeOpacity={0.75}>
+            <ShoppingCart size={20} color="#0F172A" />
             {cartCount > 0 && (
               <View style={styles.badgeSmall}>
-                <Text style={styles.badgeSmallText}>{cartCount}</Text>
+                <Text style={styles.badgeSmallText}>
+                  {cartCount > 99 ? '99+' : cartCount}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -272,9 +413,9 @@ const HomeScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.searchBar}
           onPress={() => navigation.navigate('Search')}
-          activeOpacity={0.8}>
-          <Search size={16} color={Colors.textMuted} style={{ marginRight: 8 }} />
-          <Text style={styles.searchPlaceholder}>
+          activeOpacity={0.85}>
+          <Search size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+          <Text style={styles.searchPlaceholder} numberOfLines={1}>
             Search products, projects, kits...
           </Text>
           <View style={styles.searchFilter}>
@@ -283,24 +424,34 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
+      {/* Main Content ScrollView */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[BRAND.primaryNavy]}
+            tintColor={BRAND.primaryNavy}
+          />
         }>
-        {/* Hero Banner */}
-        <HeroBanner />
+        {/* 1. Dynamic Promotional Posters Carousel */}
+        <PosterCarousel
+          posters={posters}
+          isLoading={isLoadingPosters}
+          navigation={navigation}
+        />
 
-        {/* Stats */}
+        {/* 2. Stats Row */}
         <StatsRow />
 
-        {/* AI Assistant Banner */}
+        {/* 3. AI Assistant Banner */}
         <View style={styles.bannerPad}>
-          <AIBanner />
+          <AIBanner onPress={() => navigation.navigate('AIAssistant')} />
         </View>
 
-        {/* Popular Categories */}
+        {/* 4. Popular Categories */}
         <View style={styles.section}>
           <SectionHeader
             title="Popular Categories"
@@ -312,101 +463,165 @@ const HomeScreen = ({ navigation }) => {
             horizontal
             showsHorizontalScrollIndicator={false}
             initialNumToRender={6}
-            maxToRenderPerBatch={6}
-            windowSize={3}
-            removeClippedSubviews={true}
+            maxToRenderPerBatch={8}
             contentContainerStyle={styles.categoryList}
             keyExtractor={item => item.id}
-            renderItem={({ item }) => <CategoryCard category={item} />}
+            renderItem={({ item }) => (
+              <CategoryCard
+                category={item}
+                onPress={() => navigateToCategory(item)}
+              />
+            )}
           />
         </View>
 
-        {/* Project Kits Carousel */}
+        {/* 5. Featured Project Kits */}
         <View style={styles.section}>
           <SectionHeader
             title="Featured Project Kits"
             subtitle="Complete kits with components + tutorials"
             onSeeAll={() => navigation.navigate('Projects')}
           />
-          <FlatList
-            data={displayKits}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            initialNumToRender={4}
-            maxToRenderPerBatch={4}
-            windowSize={3}
-            removeClippedSubviews={true}
-            contentContainerStyle={styles.kitList}
-            keyExtractor={(item, index) => item._id || `kit-${index}`}
-            renderItem={({ item }) => (
-              <ProjectCard
-                kit={item}
-                onPress={() =>
-                  navigation.navigate('Projects', {
-                    screen: 'ProjectKitDetail',
-                    params: { kitId: item._id, kit: item },
-                  })
-                }
-              />
-            )}
-          />
+          {isLoadingFeatured ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.kitList}>
+              <ProjectKitSkeleton />
+              <ProjectKitSkeleton />
+            </ScrollView>
+          ) : featuredError ? (
+            <SectionErrorState
+              message={featuredError}
+              onRetry={fetchFeaturedKits}
+            />
+          ) : displayKits.length === 0 ? (
+            <SectionEmptyState
+              message="No project kits available right now"
+              onRetry={fetchFeaturedKits}
+            />
+          ) : (
+            <FlatList
+              data={displayKits}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              initialNumToRender={4}
+              maxToRenderPerBatch={4}
+              contentContainerStyle={styles.kitList}
+              keyExtractor={(item, index) => item._id || `kit-${index}`}
+              renderItem={({ item }) => (
+                <ProjectCard
+                  kit={item}
+                  onPress={() =>
+                    navigation.navigate('Projects', {
+                      screen: 'ProjectKitDetail',
+                      params: { kitId: item._id, kit: item },
+                    })
+                  }
+                />
+              )}
+            />
+          )}
         </View>
 
-        {/* Trending Products */}
+        {/* 6. Trending Products */}
         <View style={styles.section}>
           <SectionHeader
             title="Trending Products"
             subtitle="Most popular this week"
             onSeeAll={() => navigation.navigate('Search', { sort: 'trending' })}
           />
-          <FlatList
-            data={displayTrending}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            initialNumToRender={4}
-            maxToRenderPerBatch={4}
-            windowSize={3}
-            removeClippedSubviews={true}
-            contentContainerStyle={styles.productList}
-            keyExtractor={(item, index) => item._id || `trending-${index}`}
-            renderItem={({ item }) => (
-              <ProductCard
-                product={item}
-                onPress={() => navigateToProduct(item)}
-              />
-            )}
+          {isLoadingTrending ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.productList}>
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+            </ScrollView>
+          ) : trendingError ? (
+            <SectionErrorState
+              message={trendingError}
+              onRetry={fetchTrending}
+            />
+          ) : displayTrending.length === 0 ? (
+            <SectionEmptyState
+              message="No trending products available right now"
+              onRetry={fetchTrending}
+            />
+          ) : (
+            <FlatList
+              data={displayTrending}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              initialNumToRender={4}
+              maxToRenderPerBatch={4}
+              contentContainerStyle={styles.productList}
+              keyExtractor={(item, index) => item._id || `trending-${index}`}
+              renderItem={({ item }) => (
+                <ProductCard
+                  product={item}
+                  style={styles.carouselProductCard}
+                  onPress={() => navigateToProduct(item)}
+                />
+              )}
+            />
+          )}
+        </View>
+
+        {/* 7. Build Your Project / CTA */}
+        <View style={styles.bannerPad}>
+          <BuilderBanner
+            onPress={() =>
+              navigation.navigate('Projects', { screen: 'ProjectBuilder' })
+            }
           />
         </View>
 
-        {/* Project Builder Banner */}
-        <View style={styles.bannerPad}>
-          <BuilderBanner />
-        </View>
-
-        {/* Recommended Products */}
+        {/* 8. Recommended Products */}
         <View style={styles.section}>
           <SectionHeader
             title="Recommended for You"
             subtitle="Based on your interests"
             onSeeAll={() => navigation.navigate('Search', { sort: 'recommended' })}
           />
-          <FlatList
-            data={displayRecommended}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            initialNumToRender={4}
-            maxToRenderPerBatch={4}
-            windowSize={3}
-            removeClippedSubviews={true}
-            contentContainerStyle={styles.productList}
-            keyExtractor={(item, index) => item._id || `recommended-${index}`}
-            renderItem={({ item }) => (
-              <ProductCard
-                product={item}
-                onPress={() => navigateToProduct(item)}
-              />
-            )}
-          />
+          {isLoadingRecommended ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.productList}>
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+            </ScrollView>
+          ) : recommendedError ? (
+            <SectionErrorState
+              message={recommendedError}
+              onRetry={fetchRecommended}
+            />
+          ) : displayRecommended.length === 0 ? (
+            <SectionEmptyState
+              message="No recommendations available yet"
+              onRetry={fetchRecommended}
+            />
+          ) : (
+            <FlatList
+              data={displayRecommended}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              initialNumToRender={4}
+              maxToRenderPerBatch={4}
+              contentContainerStyle={styles.productList}
+              keyExtractor={(item, index) => item._id || `recommended-${index}`}
+              renderItem={({ item }) => (
+                <ProductCard
+                  product={item}
+                  style={styles.carouselProductCard}
+                  onPress={() => navigateToProduct(item)}
+                />
+              )}
+            />
+          )}
         </View>
 
         <View style={styles.bottomPad} />
@@ -417,243 +632,405 @@ const HomeScreen = ({ navigation }) => {
 
 
 
-const getGreeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Morning';
-  if (h < 17) return 'Afternoon';
-  return 'Evening';
-};
-
-const getCategoryIcon = id => {
-  const map = {
-    arduino: Cpu, esp32: Wifi, esp8266: Radio, 'raspberry-pi': Cpu,
-    sensors: Eye, robotics: Bot, iot: Globe, embedded: Database,
-    motors: Wrench, displays: Monitor, communication: Radio, 'dev-boards': Cpu,
-    pcbs: Layers, power: Zap, components: Package, 'project-kits': Package,
-    'diy-kits': Hammer, tools: Wrench, modules: Cpu, accessories: Package,
-  };
-  return map[id] || Zap;
-};
+// ============================================================================
+// Stylesheet
+// ============================================================================
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background || '#F8FAFC' },
-  scrollContent: { paddingBottom: Spacing.xl },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scrollContent: {
+    paddingBottom: 28,
+  },
+
+  // App Bar
   appBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.white,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
     ...Shadows.sm,
   },
-  appBarLeft: { flexDirection: 'row', alignItems: 'center' },
-  logoMini: {
+  appBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  logoImage: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: Colors.secondary || '#F97316',
+    marginRight: 10,
+  },
+  titleColumn: {
+    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.sm,
   },
-  logoMiniText: { fontSize: 18 },
-  greeting: { fontSize: Typography.fontSize.xs, color: Colors.textMuted },
+  greeting: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    marginBottom: 1,
+  },
   logoFull: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.extrabold,
-    color: Colors.primary,
+    fontSize: 17,
+    fontWeight: '800',
+    color: BRAND.primaryNavy,
+    letterSpacing: -0.3,
   },
-  appBarRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  appBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.surfaceElevated || '#F1F5F9',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
   },
-  iconBtnText: { fontSize: 17 },
   badgeSmall: {
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: Colors.secondary || '#F97316',
+    backgroundColor: BRAND.accentOrange,
     borderRadius: 8,
-    width: 16,
+    minWidth: 16,
     height: 16,
+    paddingHorizontal: 3,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
-  badgeSmallText: { color: Colors.white, fontSize: 9, fontWeight: Typography.fontWeight.bold },
+  badgeSmallText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
+  // Search Bar
   searchContainer: {
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.white,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceElevated || '#F1F5F9',
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm + 2,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    paddingLeft: 14,
+    paddingRight: 6,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: Colors.border || '#E2E8F0',
+    borderColor: '#E2E8F0',
   },
-  searchIcon: { fontSize: 15, marginRight: Spacing.sm },
-  searchPlaceholder: { flex: 1, fontSize: Typography.fontSize.sm, color: Colors.textMuted },
+  searchPlaceholder: {
+    flex: 1,
+    fontSize: 13,
+    color: '#94A3B8',
+    paddingVertical: 2,
+  },
   searchFilter: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    backgroundColor: BRAND.primaryNavy,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  searchFilterText: { color: Colors.white, fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.semibold },
+  searchFilterText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
 
-  // Hero
+  // Hero Banner (Responsive, Never Clipped)
   hero: {
-    height: BANNER_HEIGHT,
-    backgroundColor: Colors.primary,
+    minHeight: 215,
+    backgroundColor: BRAND.primaryNavy,
     overflow: 'hidden',
-    marginHorizontal: Spacing.base,
-    marginTop: Spacing.sm,
-    borderRadius: BorderRadius.xl,
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 18,
     position: 'relative',
+    ...Shadows.md,
   },
   heroBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.primaryDark || '#0F172A',
+    backgroundColor: BRAND.darkNavy,
   },
-  heroContent: { padding: Spacing.lg, justifyContent: 'center', flex: 1 },
-  heroTag: {
-    fontSize: Typography.fontSize.xs,
-    color: Colors.secondary || '#F97316',
-    fontWeight: Typography.fontWeight.semibold,
-    marginBottom: 4,
-    letterSpacing: Typography.letterSpacing.widest,
-    textTransform: 'uppercase',
-  },
-  heroTitle: {
-    fontSize: Typography.fontSize['2xl'] || 22,
-    fontWeight: Typography.fontWeight.extrabold,
-    color: Colors.white,
-    lineHeight: 28,
-    marginBottom: 4,
-  },
-  heroSubtitle: {
-    fontSize: Typography.fontSize.xs,
-    color: Colors.white + 'CC',
-    lineHeight: 16,
-    marginBottom: Spacing.md,
-  },
-  heroButtons: { flexDirection: 'row', gap: Spacing.sm },
-  heroPrimaryBtn: {
-    backgroundColor: Colors.secondary || '#F97316',
-    borderRadius: BorderRadius.base,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  heroPrimaryText: { color: Colors.white, fontWeight: Typography.fontWeight.bold, fontSize: Typography.fontSize.xs },
-  heroSecondaryBtn: {
-    backgroundColor: Colors.white + '20',
-    borderRadius: BorderRadius.base,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.white + '40',
-  },
-  heroSecondaryText: { color: Colors.white, fontWeight: Typography.fontWeight.bold, fontSize: Typography.fontSize.xs },
   heroDecor1: {
     position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: Colors.primaryAccent || '#3B82F6',
-    opacity: 0.2,
+    top: -35,
+    right: -35,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: BRAND.cyan,
+    opacity: 0.16,
   },
   heroDecor2: {
     position: 'absolute',
-    bottom: -30,
-    right: 30,
+    bottom: -25,
+    right: 40,
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: Colors.secondary || '#F97316',
-    opacity: 0.15,
+    backgroundColor: BRAND.secondaryBlue,
+    opacity: 0.35,
   },
-  heroEmoji: { position: 'absolute', bottom: 8, right: 16, fontSize: 52, opacity: 0.2 },
-
-  // Stats
-  statsRow: {
+  heroEmojiContainer: {
+    position: 'absolute',
+    bottom: 12,
+    right: 18,
+  },
+  heroContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 20,
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  heroTagRow: {
     flexDirection: 'row',
-    backgroundColor: Colors.white,
-    marginHorizontal: Spacing.base,
-    marginTop: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.sm,
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  heroTag: {
+    fontSize: 11,
+    color: BRAND.accentOrange,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 30,
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  heroSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 17,
+    marginBottom: 16,
+    maxWidth: '85%',
+  },
+  heroButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroPrimaryBtn: {
+    backgroundColor: BRAND.accentOrange,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     ...Shadows.sm,
   },
-  statCard: { flex: 1, alignItems: 'center' },
-  statIcon: { fontSize: 18, marginBottom: 2 },
-  statValue: { fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.extrabold, color: Colors.primary },
-  statLabel: { fontSize: 10, color: Colors.textMuted },
+  heroPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  heroSecondaryBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  heroSecondaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
 
-  // Banners
-  bannerPad: { paddingHorizontal: Spacing.base, marginVertical: Spacing.xs },
+  // Stats Card
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.sm,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statIcon: {
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: BRAND.primaryNavy,
+    marginBottom: 1,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+
+  // Banners padding
+  bannerPad: {
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+
+  // AI Shopping Assistant Banner
   aiBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.base,
-    overflow: 'hidden',
+    backgroundColor: BRAND.primaryNavy,
+    borderRadius: 16,
+    padding: 16,
     ...Shadows.md,
   },
-  aiBannerLeft: { flex: 1 },
-  aiLabel: { fontSize: Typography.fontSize.xs, color: Colors.secondary, fontWeight: Typography.fontWeight.semibold, marginBottom: 2 },
-  aiTitle: { fontSize: Typography.fontSize.base, fontWeight: Typography.fontWeight.extrabold, color: Colors.white, marginBottom: 2 },
-  aiDesc: { fontSize: Typography.fontSize.xs, color: Colors.white + 'BB' },
-  aiBannerRight: { marginLeft: Spacing.sm },
-  aiEmoji: { fontSize: 40 },
+  aiBannerLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  aiLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  aiLabel: {
+    fontSize: 11,
+    color: BRAND.accentOrange,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  aiTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  aiDesc: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 16,
+  },
+  aiBannerRight: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  botCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: BRAND.secondaryBlue,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: BRAND.cyan,
+  },
+
+  // Project Builder Banner
   builderBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: (Colors.secondary || '#F97316') + '12',
-    borderRadius: BorderRadius.base,
-    padding: Spacing.base,
+    backgroundColor: '#F9731612',
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1.5,
-    borderColor: (Colors.secondary || '#F97316') + '30',
+    borderColor: '#F9731630',
   },
-  builderEmoji: { fontSize: 28, marginRight: Spacing.sm },
-  builderContent: { flex: 1 },
-  builderTitle: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.bold, color: Colors.textPrimary },
-  builderDesc: { fontSize: Typography.fontSize.xs, color: Colors.textSecondary },
-  builderArrow: { fontSize: 18, color: Colors.secondary, fontWeight: Typography.fontWeight.bold },
+  builderIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    ...Shadows.sm,
+  },
+  builderContent: {
+    flex: 1,
+  },
+  builderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  builderDesc: {
+    fontSize: 11,
+    color: '#64748B',
+  },
 
-  // Section
-  section: { marginBottom: Spacing.xs },
+  // Section Headers
+  section: {
+    marginTop: 14,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.base,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xs,
+    paddingHorizontal: 16,
+    marginBottom: 10,
   },
-  sectionTitle: { fontSize: Typography.fontSize.base || 16, fontWeight: Typography.fontWeight.bold, color: Colors.textPrimary },
-  sectionSubtitle: { fontSize: 11, color: Colors.textMuted, marginTop: 1 },
-  seeAll: { fontSize: Typography.fontSize.xs, color: Colors.primary, fontWeight: Typography.fontWeight.semibold },
+  sectionHeaderTitleCol: {
+    flex: 1,
+    marginRight: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  sectionSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  seeAll: {
+    fontSize: 12,
+    color: BRAND.primaryNavy,
+    fontWeight: '700',
+    marginRight: 2,
+  },
 
-  // Categories
-  categoryList: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.xs },
+  // Category List
+  categoryList: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
   categoryCard: {
     alignItems: 'center',
-    marginRight: Spacing.sm,
-    width: 68,
+    marginRight: 10,
+    width: 72,
   },
   categoryIcon: {
     width: 52,
@@ -661,18 +1038,119 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  categoryEmoji: { fontSize: 22 },
-  categoryName: { fontSize: 10, fontWeight: Typography.fontWeight.medium, color: Colors.textSecondary, textAlign: 'center' },
+  categoryName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+    textAlign: 'center',
+    width: '100%',
+  },
 
-  // Products
-  productList: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.xs },
+  // Products and Kits List
+  productList: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  carouselProductCard: {
+    width: 170,
+    marginRight: 12,
+    marginVertical: 4,
+    marginHorizontal: 0,
+  },
+  kitList: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
 
-  // Project Kits
-  kitList: { paddingHorizontal: Spacing.base, paddingBottom: Spacing.xs },
+  // Skeletons
+  productSkeleton: {
+    width: 170,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.sm,
+  },
+  skeletonImage: {
+    width: '100%',
+    height: 135,
+    backgroundColor: '#E2E8F0',
+  },
+  kitSkeleton: {
+    width: 260,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.sm,
+  },
+  kitSkeletonImage: {
+    width: '100%',
+    height: 130,
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonContent: {
+    padding: 10,
+  },
+  skeletonLine: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
 
-  bottomPad: { height: 40 },
+  // Empty & Error States
+  emptyContainer: {
+    marginHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyText: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  errorContainer: {
+    marginHorizontal: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  retryBtn: {
+    backgroundColor: BRAND.primaryNavy,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  bottomPad: {
+    height: 24,
+  },
 });
 
 export default HomeScreen;

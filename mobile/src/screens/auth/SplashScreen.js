@@ -15,14 +15,15 @@ import useAuthStore from '../../store/authStore';
 const {width, height} = Dimensions.get('window');
 
 const SplashScreen = ({navigation, onFinish}) => {
-  const {isAuthenticated, isInitialized} = useAuthStore();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const isInitialized = useAuthStore(state => state.isInitialized);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const taglineAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Animate logo in
-    Animated.parallel([
+    const anim = Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 800,
@@ -34,12 +35,15 @@ const SplashScreen = ({navigation, onFinish}) => {
         friction: 6,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      Animated.timing(taglineAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }).start();
+    ]);
+    anim.start(({finished} = {}) => {
+      if (finished && typeof Animated !== 'undefined' && Animated.timing) {
+        Animated.timing(taglineAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }).start();
+      }
     });
 
     // Navigate after delay
@@ -51,7 +55,12 @@ const SplashScreen = ({navigation, onFinish}) => {
       }
     }, 2500);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (anim && typeof anim.stop === 'function') {
+        anim.stop();
+      }
+    };
   }, [isInitialized, isAuthenticated, fadeAnim, scaleAnim, taglineAnim, navigation, onFinish]);
 
   return (

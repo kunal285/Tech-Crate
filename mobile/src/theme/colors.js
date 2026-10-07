@@ -1,4 +1,4 @@
-// ProjectKart Color System
+// TechCrate Color System
 const Colors = {
   // Primary Brand
   primary: '#1E3A5F',

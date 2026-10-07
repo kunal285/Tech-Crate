@@ -5,7 +5,7 @@ const cloudinary = require('../config/cloudinary');
  * @param {Buffer|string} fileSource - File buffer or Base64 string
  * @param {string} folderName - Cloudinary folder (e.g. 'products', 'projects', 'avatars')
  */
-const uploadToCloudinary = async (fileSource, folderName = 'projectkart') => {
+const uploadToCloudinary = async (fileSource, folderName = 'TechCrate') => {
   return new Promise((resolve, reject) => {
     // If Cloudinary credentials are mock/default in dev mode, provide safe fallback structure
     if (!process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY === '1234567890') {
@@ -22,7 +22,7 @@ const uploadToCloudinary = async (fileSource, folderName = 'projectkart') => {
     }
 
     const uploadOptions = {
-      folder: `projectkart/${folderName}`,
+      folder: `TechCrate/${folderName}`,
       resource_type: 'image',
       transformation: [
         { quality: 'auto', fetch_format: 'auto' },

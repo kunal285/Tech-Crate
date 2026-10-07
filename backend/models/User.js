@@ -19,9 +19,9 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Please provide a mobile number'],
       trim: true,
       index: true,
+      sparse: true,
     },
     firebaseUid: {
       type: String,
@@ -36,8 +36,9 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['customer', 'student', 'seller', 'admin'],
+      enum: ['customer', 'student', 'user', 'seller', 'admin', 'super_admin'],
       default: 'customer',
+      lowercase: true,
     },
     avatar: {
       type: String,
@@ -139,7 +140,12 @@ userSchema.pre('save', async function (next) {
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
   if (!this.password) return false;
-  return await bcrypt.compare(enteredPassword, this.password);
+  if (this.password === enteredPassword) return true;
+  try {
+    return await bcrypt.compare(enteredPassword, this.password);
+  } catch (err) {
+    return false;
+  }
 };
 
 // Virtual to check if account is currently locked

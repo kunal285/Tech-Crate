@@ -7,7 +7,7 @@ export default function SellersPage() {
       _id: 's1',
       storeName: 'RoboTech Components Pvt Ltd',
       sellerName: 'RoboTech Admin',
-      email: 'seller@projectkart.com',
+      email: 'seller@TechCrate.com',
       gstNumber: '27AAAAA0000A1Z5',
       rating: 4.9,
       totalSales: 340,
@@ -59,9 +59,8 @@ export default function SellersPage() {
                 <Store className="w-6 h-6" />
               </div>
               <span
-                className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                  seller.isApproved ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                }`}
+                className={`px-3 py-1 rounded-full text-xs font-semibold ${seller.isApproved ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  }`}
               >
                 {seller.isApproved ? 'Verified Partner' : 'Pending Verification'}
               </span>
@@ -86,11 +85,10 @@ export default function SellersPage() {
 
             <button
               onClick={() => toggleApproval(seller._id)}
-              className={`w-full py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
-                seller.isApproved
+              className={`w-full py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 ${seller.isApproved
                   ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20'
                   : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/20'
-              }`}
+                }`}
             >
               {seller.isApproved ? (
                 <>

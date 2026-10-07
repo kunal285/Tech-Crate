@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {apiPost, apiGet, apiPut} from './api';
 import {STORAGE_KEYS} from '../constants';
+import firebaseAuthService from './firebaseAuthService';
 
 const authService = {
   // Firebase Phone Auth - Exchange Verified ID Token for Backend Session
@@ -55,9 +56,42 @@ const authService = {
     return await apiPost('/auth/resend-otp', {phoneNumber});
   },
 
-  // Register user
+  // Register user with Firebase Auth + Database Profile
   register: async userData => {
-    const result = await apiPost('/auth/register', userData);
+    let fbUid = null;
+    let fbIdToken = null;
+
+    // 1. Firebase createUserWithEmailAndPassword (optional sync)
+    if (userData.email && userData.password && firebaseAuthService.isFirebaseConfigured()) {
+      try {
+        const fbResult = await firebaseAuthService.createUserWithEmailAndPassword(
+          userData.email,
+          userData.password,
+          userData.name
+        );
+
+        if (fbResult.success) {
+          fbUid = fbResult.uid;
+          fbIdToken = fbResult.idToken;
+        } else if (fbResult.rawError?.includes('EMAIL_EXISTS')) {
+          return fbResult;
+        } else {
+          // App Check or config block: log warning and proceed to backend database registration
+          console.warn('[Firebase Auth Register Bypass]', fbResult.message);
+        }
+      } catch (fbErr) {
+        console.warn('[Firebase Auth Register Error]', fbErr.message);
+      }
+    }
+
+    // 2. Persist user in database
+    const payload = {
+      ...userData,
+      firebaseUid: fbUid,
+      firebaseIdToken: fbIdToken,
+    };
+
+    const result = await apiPost('/auth/register', payload);
     if (result.success && result.data?.token) {
       const userObj = result.data.user || result.data;
       await authService.persistSession(
@@ -69,9 +103,56 @@ const authService = {
     return result;
   },
 
-  // Login user (password fallback)
+  // Login user (Firebase Email/Password or Phone/Password)
   login: async credentials => {
-    const result = await apiPost('/auth/login', credentials);
+    const rawUsername = String(credentials.username || '').trim();
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawUsername);
+
+    let fbUid = null;
+    let fbIdToken = null;
+
+    // 1. If username is an email address, try Firebase first (optional sync)
+    if (isEmail && credentials.password && firebaseAuthService.isFirebaseConfigured()) {
+      try {
+        const fbResult = await firebaseAuthService.signInWithEmailAndPassword(
+          rawUsername,
+          credentials.password
+        );
+
+        if (fbResult.success) {
+          fbUid = fbResult.uid;
+          fbIdToken = fbResult.idToken;
+        } else {
+          // If App Check or Firebase fails, continue to backend authentication
+          console.warn('[Firebase Auth Login Bypass]', fbResult.message);
+        }
+      } catch (fbErr) {
+        console.warn('[Firebase Auth Login Error]', fbErr.message);
+      }
+    }
+
+    // 2. Authenticate / synchronize with backend
+    const payload = {
+      ...credentials,
+      firebaseUid: fbUid,
+      firebaseIdToken: fbIdToken,
+    };
+
+    const result = await apiPost('/auth/login', payload);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      await authService.persistSession(
+        result.data.token,
+        userObj,
+        result.data.refreshToken
+      );
+    }
+    return result;
+  },
+
+  // Social Auth (Google / Facebook)
+  socialAuth: async socialPayload => {
+    const result = await apiPost('/auth/social-auth', socialPayload);
     if (result.success && result.data?.token) {
       const userObj = result.data.user || result.data;
       await authService.persistSession(
@@ -87,7 +168,9 @@ const authService = {
   logout: async () => {
     try {
       const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-      await apiPost('/auth/logout', {refreshToken});
+      if (refreshToken) {
+        await apiPost('/auth/logout', {refreshToken});
+      }
     } catch {
       // Silently proceed with local cleanup
     }
@@ -95,7 +178,26 @@ const authService = {
       STORAGE_KEYS.AUTH_TOKEN,
       STORAGE_KEYS.REFRESH_TOKEN,
       STORAGE_KEYS.USER_DATA,
+      STORAGE_KEYS.DEVICE_TOKEN,
     ]);
+  },
+
+  // Refresh Session Token explicitly
+  refreshToken: async () => {
+    try {
+      const storedRefreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      if (!storedRefreshToken) return { success: false, message: 'No refresh token' };
+      const result = await apiPost('/auth/refresh-token', { refreshToken: storedRefreshToken });
+      if (result.success && result.data?.token) {
+        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, String(result.data.token));
+        if (result.data.refreshToken) {
+          await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, String(result.data.refreshToken));
+        }
+      }
+      return result;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
   },
 
   // Forgot password

@@ -5,19 +5,32 @@ const { validatePasswordStrength } = require('../utils/cryptoUtils');
  * Middleware to validate Registration Request Body
  */
 const validateRegistrationInput = (req, res, next) => {
-  let { name, email, password } = req.body;
+  let { name, email, phone, mobile, password, confirmPassword } = req.body;
+  const rawPhone = phone || mobile;
 
   if (!name || typeof name !== 'string' || validator.isEmpty(name.trim())) {
     return res.status(400).json({ message: 'Please provide a valid full name' });
   }
 
-  if (!email || typeof email !== 'string' || !validator.isEmail(email)) {
+  if (!email || typeof email !== 'string' || !validator.isEmail(email.trim())) {
     return res.status(400).json({ message: 'Please provide a valid email address' });
+  }
+
+  if (rawPhone) {
+    const cleanDigits = String(rawPhone).replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
+      return res.status(400).json({ message: 'Please provide a valid 10-digit mobile number' });
+    }
+    req.body.phone = cleanDigits.slice(-10);
   }
 
   const passwordCheck = validatePasswordStrength(password);
   if (!passwordCheck.isValid) {
     return res.status(400).json({ message: passwordCheck.message });
+  }
+
+  if (confirmPassword && password !== confirmPassword) {
+    return res.status(400).json({ message: 'Passwords do not match' });
   }
 
   // Normalize and sanitize
@@ -28,20 +41,30 @@ const validateRegistrationInput = (req, res, next) => {
 };
 
 /**
- * Middleware to validate Login Request Body
+ * Middleware to validate Login Request Body (Supports Email or Mobile Number as Username)
  */
 const validateLoginInput = (req, res, next) => {
-  let { email, password } = req.body;
+  let { email, username, phone, password } = req.body;
+  const identifier = String(username || email || phone || '').trim();
 
-  if (!email || typeof email !== 'string' || !validator.isEmail(email)) {
-    return res.status(401).json({ message: 'Invalid email or password.' });
+  if (!identifier) {
+    return res.status(400).json({ message: 'Please provide mobile number or email.' });
   }
 
   if (!password || typeof password !== 'string' || validator.isEmpty(password)) {
-    return res.status(401).json({ message: 'Invalid email or password.' });
+    return res.status(400).json({ message: 'Please enter your password.' });
   }
 
-  req.body.email = validator.normalizeEmail(email.trim().toLowerCase());
+  req.body.username = identifier;
+  if (validator.isEmail(identifier)) {
+    req.body.email = validator.normalizeEmail(identifier.toLowerCase());
+  } else {
+    const cleanDigits = identifier.replace(/\D/g, '');
+    if (cleanDigits.length >= 10) {
+      req.body.phone = cleanDigits.slice(-10);
+    }
+  }
+
   next();
 };
 

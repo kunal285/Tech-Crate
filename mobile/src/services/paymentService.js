@@ -1,4 +1,4 @@
-import {apiGet, apiPost} from './api';
+import { apiGet, apiPost } from './api';
 
 const paymentService = {
   // Create Razorpay order
@@ -23,25 +23,25 @@ const paymentService = {
 
   // Request refund
   requestRefund: async (paymentId, amount, reason) => {
-    return await apiPost(`/payments/${paymentId}/refund`, {amount, reason});
+    return await apiPost(`/payments/${paymentId}/refund`, { amount, reason });
   },
 
   // Build Razorpay options from order
-  buildRazorpayOptions: (razorpayOrder, user, description = 'ProjectKart Purchase') => {
+  buildRazorpayOptions: (razorpayOrder, user, description = 'TechCrate Purchase') => {
     return {
       description,
       image: 'https://your-logo-url.com/logo.png',
       currency: razorpayOrder.currency || 'INR',
       key: razorpayOrder.key_id,
       amount: razorpayOrder.amount,
-      name: 'ProjectKart',
+      name: 'TechCrate',
       order_id: razorpayOrder.id,
       prefill: {
         email: user.email,
         contact: user.phone || '',
         name: user.name,
       },
-      theme: {color: '#1E3A5F'},
+      theme: { color: '#1E3A5F' },
     };
   },
 };

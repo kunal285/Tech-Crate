@@ -67,8 +67,8 @@ const getPasswordStrengthScore = (password) => {
  */
 const generate2FASecret = async (email) => {
   const secret = speakeasy.generateSecret({
-    name: `ProjectKart (${email})`,
-    issuer: 'ProjectKart',
+    name: `TechCrate (${email})`,
+    issuer: 'TechCrate',
     length: 20,
   });
 

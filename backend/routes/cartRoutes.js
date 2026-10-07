@@ -4,16 +4,24 @@ const {
   getCart,
   addToCart,
   updateCartItem,
+  removeCartItem,
   clearCart,
 } = require('../controllers/cartController');
 const { protect } = require('../middleware/authMiddleware');
+const { validate } = require('../middleware/zodValidation');
+const { addToCartSchema } = require('../validators/schemas');
 
-router
-  .route('/')
-  .get(protect, getCart)
-  .post(protect, addToCart)
-  .delete(protect, clearCart);
+router.use(protect);
 
-router.put('/item', protect, updateCartItem);
+router.route('/')
+  .get(getCart)
+  .post(validate(addToCartSchema), addToCart)
+  .delete(clearCart);
+
+// Client alias endpoints
+router.post('/add', validate(addToCartSchema), addToCart);
+router.put('/item', updateCartItem);
+router.put('/items/:itemId', updateCartItem);
+router.delete('/items/:itemId', removeCartItem);
 
 module.exports = router;

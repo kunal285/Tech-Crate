@@ -95,13 +95,14 @@ const useAuthStore = create((set, get) => ({
     return result;
   },
 
-  // Register
+  // Register (Name, Mobile, Email, Password)
   register: async userData => {
     set({isLoading: true, error: null});
     const result = await authService.register(userData);
-    if (result.success) {
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
       set({
-        user: result.data.user,
+        user: userObj,
         token: result.data.token,
         isAuthenticated: true,
         isLoading: false,
@@ -112,13 +113,32 @@ const useAuthStore = create((set, get) => ({
     return result;
   },
 
-  // Login (Password legacy fallback)
+  // Login (Mobile Number or Email as Username + Password)
   login: async credentials => {
     set({isLoading: true, error: null});
     const result = await authService.login(credentials);
-    if (result.success) {
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
       set({
-        user: result.data.user,
+        user: userObj,
+        token: result.data.token,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } else {
+      set({error: result.message, isLoading: false});
+    }
+    return result;
+  },
+
+  // Social Auth (Google / Facebook)
+  socialAuth: async socialPayload => {
+    set({isLoading: true, error: null});
+    const result = await authService.socialAuth(socialPayload);
+    if (result.success && result.data?.token) {
+      const userObj = result.data.user || result.data;
+      set({
+        user: userObj,
         token: result.data.token,
         isAuthenticated: true,
         isLoading: false,

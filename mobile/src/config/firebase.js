@@ -45,6 +45,12 @@ export const firebaseConfig = {
         process.env.VITE_FIREBASE_APP_ID ||
         process.env.NEXT_PUBLIC_FIREBASE_APP_ID)) ||
     '1:645024882086:android:999ce114bcd742cf114367',
+  webClientId:
+    (typeof process !== 'undefined' &&
+      process.env &&
+      (process.env.GOOGLE_WEB_CLIENT_ID ||
+        process.env.FIREBASE_WEB_CLIENT_ID)) ||
+    '645024882086-vdroc7r36kf6po0vjh2hiurvpssfut3c.apps.googleusercontent.com',
 };
 
 export const isFirebaseConfigured = () => Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);

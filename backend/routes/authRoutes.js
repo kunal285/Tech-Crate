@@ -18,6 +18,7 @@ const {
   revokeSession,
   revokeAllSessions,
   getSecurityLogs,
+  socialAuth,
 } = require('../controllers/authController');
 const {
   sendOtp,
@@ -55,6 +56,7 @@ router.post('/register', authLimiter, validateRegistrationInput, registerUser);
 router.post('/verify-email', verificationLimiter, verifyEmail);
 router.post('/resend-verification', verificationLimiter, resendVerificationEmail);
 router.post('/login', authLimiter, validateLoginInput, loginUser);
+router.post('/social-auth', authLimiter, socialAuth);
 router.post('/refresh-token', refreshAccessToken);
 router.post('/forgot-password', passwordResetLimiter, forgotPassword);
 router.post('/reset-password', passwordResetLimiter, validatePasswordResetInput, resetPassword);

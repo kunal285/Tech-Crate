@@ -8,6 +8,11 @@ const otpLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: {
+    keyGeneratorIpFallback: false,
+    xForwardedForHeader: false,
+    default: true,
+  },
   keyGenerator: (req) => {
     // Limit by IP + phone number combination
     const phone = (req.body?.phoneNumber || '').replace(/\D/g, '').slice(-10);
@@ -75,10 +80,25 @@ const apiLimiter = rateLimit({
   },
 });
 
+/**
+ * Rate Limiter for Checkout & Payment Endpoints
+ */
+const checkoutLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many order requests. Please wait a few minutes before placing another order.',
+  },
+});
+
 module.exports = {
   otpLimiter,
   authLimiter,
   passwordResetLimiter,
   verificationLimiter,
   apiLimiter,
+  checkoutLimiter,
 };

@@ -5,39 +5,67 @@ const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Memory storage for Multer
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_FOLDERS = ['products', 'avatars', 'banners', 'projects', 'categories'];
+
+/**
+ * Inspect magic bytes of buffer to ensure it is genuinely an image file
+ */
+const validateImageMagicBytes = (buffer) => {
+  if (!buffer || buffer.length < 4) return false;
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return true;
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return true;
+  // GIF: 47 49 46 38
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) return true;
+  // WEBP: RIFF .... WEBP
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) return true;
+  return false;
+};
+
+// Memory storage with strict limits
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype.toLowerCase())) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(new Error('Invalid file type. Only JPEG, PNG, WEBP, and GIF images are permitted.'), false);
     }
   },
 });
 
 /**
  * @route   POST /api/upload/image
- * @desc    Upload single image to Cloudinary
+ * @desc    Upload single image with magic byte verification and safe folder routing
  * @access  Protected
  */
 router.post('/image', protect, upload.single('image'), async (req, res, next) => {
   try {
     if (!req.file && !req.body.image) {
-      return res.status(400).json({ success: false, message: 'No image file or data provided' });
+      return res.status(400).json({ success: false, message: 'No image file or data provided.' });
     }
 
-    const folder = req.body.folder || 'products';
-    const fileSource = req.file ? req.file.buffer : req.body.image;
+    if (req.file && !validateImageMagicBytes(req.file.buffer)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Security verification failed: File content does not match a valid image format.',
+      });
+    }
 
-    const result = await uploadToCloudinary(fileSource, folder);
+    // Sanitize destination folder to prevent path traversal
+    const requestedFolder = String(req.body.folder || 'products').toLowerCase();
+    const safeFolder = ALLOWED_FOLDERS.includes(requestedFolder) ? requestedFolder : 'products';
+
+    const fileSource = req.file ? req.file.buffer : req.body.image;
+    const result = await uploadToCloudinary(fileSource, safeFolder);
 
     res.json({
       success: true,
-      message: 'Image uploaded to Cloudinary successfully',
+      message: 'Image uploaded successfully',
       url: result.secure_url || result.url,
       public_id: result.public_id,
       width: result.width,
@@ -51,27 +79,38 @@ router.post('/image', protect, upload.single('image'), async (req, res, next) =>
 
 /**
  * @route   POST /api/upload/images
- * @desc    Upload multiple images to Cloudinary
+ * @desc    Upload multiple images with security checks
  * @access  Protected
  */
 router.post('/images', protect, upload.array('images', 5), async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ success: false, message: 'No image files provided' });
+      return res.status(400).json({ success: false, message: 'No image files provided.' });
     }
 
-    const folder = req.body.folder || 'products';
-    const uploadPromises = req.files.map((file) => uploadToCloudinary(file.buffer, folder));
+    for (const file of req.files) {
+      if (!validateImageMagicBytes(file.buffer)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Security verification failed: One or more files are not valid images.',
+        });
+      }
+    }
+
+    const requestedFolder = String(req.body.folder || 'products').toLowerCase();
+    const safeFolder = ALLOWED_FOLDERS.includes(requestedFolder) ? requestedFolder : 'products';
+
+    const uploadPromises = req.files.map((file) => uploadToCloudinary(file.buffer, safeFolder));
     const results = await Promise.all(uploadPromises);
 
-    const uploadedImages = results.map((res) => ({
-      url: res.secure_url || res.url,
-      public_id: res.public_id,
+    const uploadedImages = results.map((r) => ({
+      url: r.secure_url || r.url,
+      public_id: r.public_id,
     }));
 
     res.json({
       success: true,
-      message: 'Images uploaded to Cloudinary successfully',
+      message: 'Images uploaded successfully',
       count: uploadedImages.length,
       images: uploadedImages,
     });

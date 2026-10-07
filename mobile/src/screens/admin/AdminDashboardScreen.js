@@ -7,7 +7,7 @@ const AdminDashboardScreen = () => (
   <View style={styles.container}>
     <Header title="Admin Dashboard" />
     <View style={styles.content}>
-      <Text style={styles.title}>ProjectKart Admin Overview</Text>
+      <Text style={styles.title}>TechCrate Admin Overview</Text>
     </View>
   </View>
 );

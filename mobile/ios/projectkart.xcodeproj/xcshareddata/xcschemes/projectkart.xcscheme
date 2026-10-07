@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "projectkart.app"
-               BlueprintName = "projectkart"
-               ReferencedContainer = "container:projectkart.xcodeproj">
+               BuildableName = "TechCrate.app"
+               BlueprintName = "TechCrate"
+               ReferencedContainer = "container:TechCrate.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "projectkartTests.xctest"
-               BlueprintName = "projectkartTests"
-               ReferencedContainer = "container:projectkart.xcodeproj">
+               BuildableName = "TechCrateTests.xctest"
+               BlueprintName = "TechCrateTests"
+               ReferencedContainer = "container:TechCrate.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "projectkart.app"
-            BlueprintName = "projectkart"
-            ReferencedContainer = "container:projectkart.xcodeproj">
+            BuildableName = "TechCrate.app"
+            BlueprintName = "TechCrate"
+            ReferencedContainer = "container:TechCrate.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "projectkart.app"
-            BlueprintName = "projectkart"
-            ReferencedContainer = "container:projectkart.xcodeproj">
+            BuildableName = "TechCrate.app"
+            BlueprintName = "TechCrate"
+            ReferencedContainer = "container:TechCrate.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

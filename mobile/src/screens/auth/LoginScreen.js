@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,192 +12,103 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Zap, Phone, Lock, ArrowRight, RefreshCw, GraduationCap, UserCheck, ShieldCheck } from 'lucide-react-native';
+import {
+  User,
+  Lock,
+  Eye,
+  EyeOff,
+} from 'lucide-react-native';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import useAuthStore from '../../store/authStore';
-
-import firebaseAuthService from '../../services/firebaseAuthService';
+import socialAuthService from '../../services/socialAuthService';
 
 const LoginScreen = ({ navigation }) => {
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [requestId, setRequestId] = useState('');
-  const [firebaseSessionInfo, setFirebaseSessionInfo] = useState('');
-  const [authMode, setAuthMode] = useState('firebase'); // 'firebase' or 'direct'
-  const [maskedPhone, setMaskedPhone] = useState('');
-  const [step, setStep] = useState(1); // 1: Send Phone, 2: Enter OTP
-  const [accountType, setAccountType] = useState('customer'); // 'customer' or 'student'
-  
-  // Student Additional Details (for student activation)
-  const [name, setName] = useState('');
-  const [college, setCollege] = useState('');
-  const [branch, setBranch] = useState('');
-  const [studentId, setStudentId] = useState('');
+  const login = useAuthStore(state => state.login);
+  const socialAuth = useAuthStore(state => state.socialAuth);
+  const isLoading = useAuthStore(state => state.isLoading);
+  const error = useAuthStore(state => state.error);
+  const clearError = useAuthStore(state => state.clearError);
 
-  // Timers
-  const [otpTimer, setOtpTimer] = useState(300); // 5 minutes (300 seconds)
-  const [cooldownTimer, setCooldownTimer] = useState(0); // 30 seconds resend cooldown
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const { sendOtp, verifyOtp, firebaseLogin, isLoading, error, clearError } = useAuthStore();
+  const validate = () => {
+    const newErrors = {};
+    const trimmedUser = username.trim();
 
-  // 5-Minute OTP Expiry Countdown
-  useEffect(() => {
-    let interval = null;
-    if (step === 2 && otpTimer > 0) {
-      interval = setInterval(() => {
-        setOtpTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (otpTimer === 0) {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [step, otpTimer]);
-
-  // 30-Second Resend Cooldown Timer
-  useEffect(() => {
-    let interval = null;
-    if (cooldownTimer > 0) {
-      interval = setInterval(() => {
-        setCooldownTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (cooldownTimer === 0) {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [cooldownTimer]);
-
-  const formatTimer = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const validatePhone = () => {
-    const clean = phone.replace(/\D/g, '');
-    if (!clean || clean.length !== 10) {
-      setErrors({ phone: 'Enter a valid 10-digit mobile number' });
-      return false;
-    }
-    setErrors({});
-    return true;
-  };
-
-  const handleSendOtp = async () => {
-    clearError();
-    if (!validatePhone()) return;
-
-    // Check if Firebase Client Credentials are ready
-    if (firebaseAuthService.isFirebaseConfigured()) {
-      setAuthMode('firebase');
-      const result = await firebaseAuthService.sendPhoneOtp(phone);
-      if (result.success) {
-        setFirebaseSessionInfo(result.sessionInfo);
-        setMaskedPhone(result.maskedPhone || `+91 ******${phone.slice(-4)}`);
-        setStep(2);
-        setOtpTimer(300);
-        setCooldownTimer(30);
-      } else {
-        Alert.alert('Firebase Phone Auth', result.message);
-      }
+    if (!trimmedUser) {
+      newErrors.username = 'Please enter your mobile number or email';
     } else {
-      // Direct SMS Provider Route
-      setAuthMode('direct');
-      const result = await sendOtp(phone);
-      if (result.success) {
-        setRequestId(result.data.requestId);
-        setMaskedPhone(result.data.maskedPhone || `+91 ******${phone.slice(-4)}`);
-        setStep(2);
-        setOtpTimer(300);
-        setCooldownTimer(30);
-      } else {
-        Alert.alert('Phone Authentication', result.message);
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedUser);
+      const cleanDigits = trimmedUser.replace(/\D/g, '');
+      const isPhone = cleanDigits.length >= 10;
+
+      if (!isEmail && !isPhone) {
+        newErrors.username = 'Enter a valid 10-digit mobile number or email address';
       }
     }
+
+    if (!password) {
+      newErrors.password = 'Please enter your password';
+    } else if (password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleResendOtp = async () => {
-    if (cooldownTimer > 0) return;
+  const handleLogin = async () => {
     clearError();
+    if (!validate()) return;
 
-    if (authMode === 'firebase') {
-      const result = await firebaseAuthService.sendPhoneOtp(phone);
-      if (result.success) {
-        setFirebaseSessionInfo(result.sessionInfo);
-        setOtpTimer(300);
-        setCooldownTimer(30);
-        Alert.alert('OTP Resent', 'A new verification code has been dispatched to your mobile number.');
-      } else {
-        Alert.alert('Resend Failed', result.message);
-      }
-    } else {
-      const result = await sendOtp(phone);
-      if (result.success) {
-        setRequestId(result.data.requestId);
-        setOtpTimer(300);
-        setCooldownTimer(30);
-        Alert.alert('OTP Resent', 'A new verification code has been sent to your mobile number.');
-      } else {
-        Alert.alert('Resend Failed', result.message);
-      }
-    }
-  };
+    const result = await login({
+      username: username.trim(),
+      password,
+    });
 
-  const handleVerifyOtp = async () => {
-    clearError();
-    if (!otp || otp.length !== 6) {
-      setErrors({ otp: 'Enter 6-digit verification code' });
-      return;
-    }
-
-    if (otpTimer === 0) {
-      Alert.alert('OTP Expired', 'Your verification code has expired. Please request a new code.');
-      return;
-    }
-
-    if (authMode === 'firebase') {
-      // 1. Verify code with Firebase and retrieve Firebase ID Token
-      const fbResult = await firebaseAuthService.verifyOtpAndGetIdToken(
-        firebaseSessionInfo,
-        otp
+    if (!result.success) {
+      Alert.alert(
+        'Login Failed',
+        result.message || 'Invalid mobile number/email or password.'
       );
+    }
+  };
 
-      if (!fbResult.success) {
-        Alert.alert('Verification Failed', fbResult.message);
-        return;
+  const handleGoogleSignIn = async () => {
+    clearError();
+    const result = await socialAuthService.signInWithGoogle();
+    if (result.cancelled) {
+      // 10. If cancelled, return cleanly without error modal
+      return;
+    }
+
+    if (result.success && result.account) {
+      const authRes = await socialAuth(result.account);
+      if (!authRes.success) {
+        Alert.alert('Google Sign-In', authRes.message || 'Authentication failed');
       }
+    } else if (result.message) {
+      Alert.alert('Google Sign-In', result.message);
+    }
+  };
 
-      // 2. Exchange verified Firebase ID token for secure ProjectKart application session
-      const loginResult = await firebaseLogin({
-        idToken: fbResult.idToken,
-        accountType,
-        name: name.trim(),
-        college: college.trim(),
-        branch: branch.trim(),
-        studentId: studentId.trim(),
-      });
+  const handleFacebookSignIn = async () => {
+    clearError();
+    const result = await socialAuthService.signInWithFacebook();
+    if (result.cancelled) return;
 
-      if (!loginResult.success) {
-        Alert.alert('Authentication Failed', loginResult.message);
+    if (result.success && result.account) {
+      const authRes = await socialAuth(result.account);
+      if (!authRes.success) {
+        Alert.alert('Facebook Sign-In', authRes.message || 'Authentication failed');
       }
-    } else {
-      // Direct verification fallback
-      const result = await verifyOtp({
-        phoneNumber: phone,
-        otp,
-        requestId,
-        accountType,
-        name: name.trim(),
-        college: college.trim(),
-        branch: branch.trim(),
-        studentId: studentId.trim(),
-      });
-
-      if (!result.success) {
-        Alert.alert('Verification Failed', result.message);
-      }
+    } else if (result.message) {
+      Alert.alert('Facebook Sign-In', result.message);
     }
   };
 
@@ -212,155 +123,142 @@ const LoginScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
 
-          {/* Header */}
+          {/* Brand Header */}
           <View style={styles.header}>
             <View style={styles.logoRow}>
               <Image
-                source={require('../../assets/images/logo.png')}
-                style={{ width: 44, height: 44, marginRight: 10 }}
+                source={require('../../assets/images/TechCrate.png')}
+                style={styles.logoImage}
                 resizeMode="contain"
               />
-              <Text style={styles.logoText}>Tech Crate</Text>
+              {/* <View>
+                <Text style={styles.logoTitle}>
+                  <Text style={styles.logoTech}>Tech</Text>
+                  <Text style={styles.logoCrate}> Crate</Text>
+                </Text>
+              </View> */}
             </View>
+
             <Text style={styles.welcomeText}>Welcome Back</Text>
             <Text style={styles.subtitleText}>
-              {step === 1 ? 'Login securely with Mobile Number & OTP' : 'Enter 6-digit verification code'}
+              Sign in with your Mobile Number or Email
             </Text>
-
-            {/* Account Type Selector (Customer / Student) */}
-            {step === 1 && (
-              <View style={styles.roleSelector}>
-                <TouchableOpacity
-                  style={[styles.roleTab, accountType === 'customer' && styles.roleTabActive]}
-                  onPress={() => setAccountType('customer')}>
-                  <UserCheck size={16} color={accountType === 'customer' ? Colors.white : Colors.textMuted} />
-                  <Text style={[styles.roleTabText, accountType === 'customer' && styles.roleTabTextActive]}>
-                    Customer Account
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.roleTab, accountType === 'student' && styles.roleTabActive]}
-                  onPress={() => setAccountType('student')}>
-                  <GraduationCap size={16} color={accountType === 'student' ? Colors.white : Colors.textMuted} />
-                  <Text style={[styles.roleTabText, accountType === 'student' && styles.roleTabTextActive]}>
-                    Student Account
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
 
-          {/* Step 1: Send Phone OTP */}
-          {step === 1 && (
-            <View style={styles.form}>
-              <Input
-                label="Mobile Number"
-                value={phone}
-                onChangeText={(v) => setPhone(v.replace(/\D/g, ''))}
-                placeholder="9876543210"
-                keyboardType="number-pad"
-                maxLength={10}
-                error={errors.phone}
-                leftIcon={<Text style={styles.prefixText}>+91</Text>}
-              />
+          {/* Server Error Banner */}
+          {error ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{error}</Text>
+            </View>
+          ) : null}
 
-              {accountType === 'student' && (
-                <View style={styles.studentInfoBox}>
-                  <Text style={styles.studentInfoTitle}>Student Account Verification</Text>
-                  <Input
-                    label="Full Name"
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Kunal Gavit"
-                  />
-                  <Input
-                    label="College / Institution"
-                    value={college}
-                    onChangeText={setCollege}
-                    placeholder="IIT Bombay"
-                  />
-                  <Input
-                    label="Branch / Course"
-                    value={branch}
-                    onChangeText={setBranch}
-                    placeholder="Electronics & Electrical"
-                  />
+          {/* Form */}
+          <View style={styles.formContainer}>
+            {/* Username Field (Mobile No or Email) */}
+            <Input
+              label="Mobile Number or Email"
+              placeholder="e.g. 9876543210 or user@example.com"
+              value={username}
+              onChangeText={(text) => {
+                setUsername(text);
+                if (errors.username) setErrors({ ...errors, username: null });
+              }}
+              keyboardType="default"
+              autoCapitalize="none"
+              autoCorrect={false}
+              leftIcon={<User size={20} color={Colors.textSecondary} />}
+              error={errors.username}
+              required
+            />
+
+            {/* Password Field */}
+            <Input
+              label="Password"
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (errors.password) setErrors({ ...errors, password: null });
+              }}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              leftIcon={<Lock size={20} color={Colors.textSecondary} />}
+              rightIcon={
+                showPassword ? (
+                  <EyeOff size={20} color={Colors.textSecondary} />
+                ) : (
+                  <Eye size={20} color={Colors.textSecondary} />
+                )
+              }
+              onRightIconPress={() => setShowPassword(!showPassword)}
+              error={errors.password}
+              required
+            />
+
+            {/* Forgot Password Link */}
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            {/* Submit Button */}
+            <Button
+              title="Sign In"
+              onPress={handleLogin}
+              loading={isLoading}
+              variant="primary"
+              size="lg"
+              fullWidth
+              style={styles.submitBtn}
+            />
+
+            {/* Social Authentication Section */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.socialButtonsRow}>
+              {/* Google Login Button */}
+              <TouchableOpacity
+                style={styles.googleBtn}
+                activeOpacity={0.8}
+                onPress={handleGoogleSignIn}>
+                <View style={styles.googleIconCircle}>
+                  <Text style={styles.googleIconText}>G</Text>
                 </View>
-              )}
+                <Text style={styles.googleBtnText}>Google</Text>
+              </TouchableOpacity>
 
-              <Button
-                title="Send OTP"
-                onPress={handleSendOtp}
-                loading={isLoading}
-                fullWidth
-                size="lg"
-                style={styles.actionBtn}
-              />
+              {/* Facebook Login Button */}
+              <TouchableOpacity
+                style={styles.facebookBtn}
+                activeOpacity={0.8}
+                onPress={handleFacebookSignIn}>
+                <View style={styles.facebookIconCircle}>
+                  <Text style={styles.facebookIconText}>f</Text>
+                </View>
+                <Text style={styles.facebookBtnText}>Facebook</Text>
+              </TouchableOpacity>
             </View>
-          )}
-
-          {/* Step 2: Enter 6-Digit OTP */}
-          {step === 2 && (
-            <View style={styles.form}>
-              <View style={styles.verifyHeaderBox}>
-                <Text style={styles.verifyTitle}>Verify Mobile Number</Text>
-                <Text style={styles.verifySubtitle}>
-                  OTP sent to <Text style={styles.boldPhone}>{maskedPhone}</Text>
-                </Text>
-                <TouchableOpacity onPress={() => setStep(1)}>
-                  <Text style={styles.changeNumberText}>Edit Phone Number</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Input
-                label="6-Digit Verification Code"
-                value={otp}
-                onChangeText={(v) => setOtp(v.replace(/\D/g, ''))}
-                placeholder="_ _ _ _ _ _"
-                keyboardType="number-pad"
-                maxLength={6}
-                error={errors.otp}
-                style={styles.otpInput}
-                leftIcon={<Lock size={18} color={Colors.primary} />}
-              />
-
-              <View style={styles.timerRow}>
-                <Text style={styles.timerLabel}>OTP expires in: </Text>
-                <Text style={[styles.timerValue, otpTimer === 0 && { color: '#EF4444' }]}>
-                  {otpTimer > 0 ? formatTimer(otpTimer) : 'OTP Expired'}
-                </Text>
-              </View>
-
-              <Button
-                title="Verify OTP"
-                onPress={handleVerifyOtp}
-                loading={isLoading}
-                disabled={otpTimer === 0}
-                fullWidth
-                size="lg"
-                style={styles.actionBtn}
-              />
-
-              <View style={styles.resendContainer}>
-                <Text style={styles.resendText}>Didn't receive the OTP?</Text>
-                <TouchableOpacity
-                  onPress={handleResendOtp}
-                  disabled={cooldownTimer > 0}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <RefreshCw size={14} color={cooldownTimer > 0 ? Colors.textMuted : Colors.primary} />
-                  <Text style={[styles.resendBtnText, cooldownTimer > 0 && { color: Colors.textMuted }]}>
-                    {cooldownTimer > 0 ? `Resend available in ${cooldownTimer}s` : 'Resend OTP'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Footer Security Badge */}
-          <View style={styles.securityBadge}>
-            <ShieldCheck size={16} color="#10B981" />
-            <Text style={styles.securityText}>256-Bit Cryptographically Secure Passwordless Auth</Text>
           </View>
+
+          {/* Footer Navigation */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.footerLink}>Register Here</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Seller Link */}
+          <TouchableOpacity
+            style={styles.sellerLink}
+            onPress={() => navigation.navigate('RegisterSeller')}>
+            <Text style={styles.sellerLinkText}>Want to sell project kits? Join as Seller</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -368,24 +266,50 @@ const LoginScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: Colors.white },
-  scroll: { flexGrow: 1, padding: Spacing.base },
-  header: { alignItems: 'center', paddingTop: Spacing.lg, paddingBottom: Spacing.base },
-  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
-  logoIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: Colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.sm,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.white,
   },
-  logoText: {
-    fontSize: Typography.fontSize['2xl'],
-    fontWeight: Typography.fontWeight.extrabold,
-    color: Colors.primary,
+  flex: {
+    flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    justifyContent: 'space-between',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  logoImage: {
+    width: 48,
+    height: 48,
+    marginRight: Spacing.sm + 2,
+  },
+  logoTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    letterSpacing: -0.5,
+  },
+  logoTech: {
+    color: '#2563EB', // Tech Blue
+    fontWeight: '800',
+  },
+  logoCrate: {
+    color: '#16A34A', // Crate Green
+    fontWeight: '800',
+  },
+  logoSubtitle: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.textSecondary,
+    fontWeight: Typography.fontWeight.medium,
   },
   welcomeText: {
     fontSize: Typography.fontSize['2xl'],
@@ -398,76 +322,143 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
   },
-  roleSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: BorderRadius.lg,
-    padding: 4,
-    marginTop: Spacing.md,
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm + 2,
+    marginBottom: Spacing.base,
+  },
+  errorBannerText: {
+    color: '#B91C1C',
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
+    textAlign: 'center',
+  },
+  formContainer: {
     width: '100%',
   },
-  roleTab: {
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: Spacing.base,
+    marginTop: -4,
+  },
+  forgotText: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.primary,
+    fontWeight: Typography.fontWeight.semibold,
+  },
+  submitBtn: {
+    marginBottom: Spacing.base,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.base,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  dividerText: {
+    paddingHorizontal: Spacing.sm,
+    fontSize: Typography.fontSize.xs,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  socialButtonsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.base,
+  },
+  googleBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: BorderRadius.base,
+    height: 48,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: BorderRadius.md,
+    ...Shadows.sm,
   },
-  roleTabActive: {
-    backgroundColor: Colors.primary,
-  },
-  roleTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textMuted,
-  },
-  roleTabTextActive: {
-    color: Colors.white,
-    fontWeight: '700',
-  },
-  form: { marginTop: Spacing.sm },
-  prefixText: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginRight: 8 },
-  studentInfoBox: {
-    backgroundColor: Colors.primary + '08',
-    padding: Spacing.base,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.primary + '20',
-    marginBottom: Spacing.base,
-  },
-  studentInfoTitle: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginBottom: 8 },
-  actionBtn: { marginTop: Spacing.sm },
-  verifyHeaderBox: {
+  googleIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: Spacing.base,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.base,
+    marginRight: Spacing.xs,
   },
-  verifyTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4 },
-  verifySubtitle: { fontSize: 13, color: Colors.textSecondary },
-  boldPhone: { fontWeight: '700', color: Colors.primary },
-  changeNumberText: { fontSize: 12, color: Colors.secondary, fontWeight: '600', marginTop: 6 },
-  otpInput: { textAlign: 'center', letterSpacing: 8, fontSize: 20, fontWeight: '800' },
-  timerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 12 },
-  timerLabel: { fontSize: 13, color: Colors.textMuted },
-  timerValue: { fontSize: 14, fontWeight: '800', color: Colors.primary },
-  resendContainer: { alignItems: 'center', marginTop: Spacing.xl },
-  resendText: { fontSize: 13, color: Colors.textSecondary, marginBottom: 4 },
-  resendBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
-  securityBadge: {
+  googleIconText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#EA4335',
+  },
+  googleBtnText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.textPrimary,
+  },
+  facebookBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: Spacing['2xl'],
-    marginBottom: Spacing.base,
+    height: 48,
+    backgroundColor: '#1877F2',
+    borderRadius: BorderRadius.md,
+    ...Shadows.sm,
   },
-  securityText: { fontSize: 11, color: Colors.textMuted, fontWeight: '500' },
+  facebookIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.xs,
+  },
+  facebookIconText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1877F2',
+  },
+  facebookBtnText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.white,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+  },
+  footerText: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.textSecondary,
+  },
+  footerLink: {
+    fontSize: Typography.fontSize.sm,
+    color: Colors.primary,
+    fontWeight: Typography.fontWeight.bold,
+  },
+  sellerLink: {
+    alignItems: 'center',
+    marginTop: Spacing.md,
+    paddingBottom: Spacing.xs,
+  },
+  sellerLinkText: {
+    fontSize: Typography.fontSize.xs,
+    color: Colors.textMuted,
+    textDecorationLine: 'underline',
+  },
 });
 
 export default LoginScreen;

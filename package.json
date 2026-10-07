@@ -1,8 +1,8 @@
 {
-  "name": "projectkart-workspace",
+  "name": "TechCrate-workspace",
   "version": "1.0.0",
   "private": true,
-  "description": "ProjectKart — Full-Stack AI-Powered Student & Maker E-Commerce Platform",
+  "description": "TechCrate — Full-Stack AI-Powered Student & Maker E-Commerce Platform",
   "scripts": {
     "start:backend": "npm --prefix backend start",
     "dev:backend": "npm --prefix backend run dev",

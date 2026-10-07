@@ -17,6 +17,7 @@ import SellerReviewsScreen from '../screens/seller/SellerReviewsScreen';
 import SellerAnalyticsScreen from '../screens/seller/SellerAnalyticsScreen';
 import SellerProfileScreen from '../screens/seller/SellerProfileScreen';
 import CreateProjectKitScreen from '../screens/seller/CreateProjectKitScreen';
+import ProductDetailScreen from '../screens/products/ProductDetailScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -36,6 +37,7 @@ const DashboardStack = () => (
   <Stack.Navigator screenOptions={{headerShown: false}}>
     <Stack.Screen name="SellerDashboardMain" component={SellerDashboardScreen} />
     <Stack.Screen name="SellerAnalytics" component={SellerAnalyticsScreen} />
+    <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
   </Stack.Navigator>
 );
 
@@ -46,6 +48,7 @@ const ProductsStack = () => (
     <Stack.Screen name="EditProduct" component={EditProductScreen} />
     <Stack.Screen name="SellerInventory" component={SellerInventoryScreen} />
     <Stack.Screen name="CreateProjectKit" component={CreateProjectKitScreen} />
+    <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
   </Stack.Navigator>
 );
 

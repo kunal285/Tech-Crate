@@ -2,6 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Search, Cpu, ShoppingCart, User } from 'lucide-react-native';
 import { Colors } from '../theme';
 
@@ -41,9 +42,9 @@ const TabIcon = ({ focused, IconComponent, label, badge }) => (
   <View style={styles.tabItem}>
     <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
       <IconComponent
-        size={20}
-        color={focused ? (Colors.primary || '#1E3A5F') : (Colors.textMuted || '#94A3B8')}
-        strokeWidth={focused ? 2.2 : 1.8}
+        size={21}
+        color={focused ? '#032762' : '#94A3B8'}
+        strokeWidth={focused ? 2.4 : 1.8}
       />
       {badge > 0 && (
         <View style={styles.badge}>
@@ -51,7 +52,9 @@ const TabIcon = ({ focused, IconComponent, label, badge }) => (
         </View>
       )}
     </View>
-    <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>
+    <Text
+      numberOfLines={1}
+      style={[styles.tabLabel, focused && styles.tabLabelActive]}>
       {label}
     </Text>
   </View>
@@ -68,6 +71,12 @@ const HomeStack = () => (
     <Stack.Screen name="WriteReview" component={WriteReviewScreen} />
     <Stack.Screen name="AIAssistant" component={AIAssistantScreen} />
     <Stack.Screen name="ProjectHubFromHome" component={ProjectHubScreen} />
+    <Stack.Screen name="Wishlist" component={WishlistScreen} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+    <Stack.Screen name="Orders" component={OrdersScreen} />
+    <Stack.Screen name="OrderHistory" component={OrdersScreen} />
+    <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+    <Stack.Screen name="OrderDetails" component={OrderDetailScreen} />
   </Stack.Navigator>
 );
 
@@ -78,6 +87,7 @@ const SearchStack = () => (
     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
     <Stack.Screen name="Category" component={CategoryScreen} />
     <Stack.Screen name="ProductList" component={ProductListScreen} />
+    <Stack.Screen name="Wishlist" component={WishlistScreen} />
   </Stack.Navigator>
 );
 
@@ -100,6 +110,11 @@ const CartStack = () => (
     <Stack.Screen name="Payment" component={PaymentScreen} />
     <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />
     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
+    <Stack.Screen name="Wishlist" component={WishlistScreen} />
+    <Stack.Screen name="Orders" component={OrdersScreen} />
+    <Stack.Screen name="OrderHistory" component={OrdersScreen} />
+    <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+    <Stack.Screen name="OrderDetails" component={OrderDetailScreen} />
   </Stack.Navigator>
 );
 
@@ -108,7 +123,9 @@ const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ProfileMain" component={ProfileScreen} />
     <Stack.Screen name="Orders" component={OrdersScreen} />
+    <Stack.Screen name="OrderHistory" component={OrdersScreen} />
     <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+    <Stack.Screen name="OrderDetails" component={OrderDetailScreen} />
     <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
     <Stack.Screen name="Wishlist" component={WishlistScreen} />
     <Stack.Screen name="Addresses" component={AddressScreen} />
@@ -119,15 +136,19 @@ const ProfileStack = () => (
 );
 
 const CustomerNavigator = () => {
+  const insets = useSafeAreaInsets();
   const cartCount = useCartStore(state =>
     (state.items || []).reduce((sum, i) => sum + (i.quantity || 1), 0),
   );
+
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 6);
+  const tabHeight = 54 + bottomPadding;
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: tabHeight, paddingBottom: bottomPadding }],
         tabBarShowLabel: false,
         tabBarItemStyle: styles.tabBarItem,
         tabBarIconStyle: styles.tabBarIconStyle,
@@ -188,19 +209,18 @@ const CustomerNavigator = () => {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: Colors.white || '#FFFFFF',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: Colors.border || '#E2E8F0',
-    paddingTop: 4,
-    paddingBottom: Platform.OS === 'ios' ? 18 : 4,
-    height: Platform.OS === 'ios' ? 76 : 60,
-    elevation: 12,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 6,
+    elevation: 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   tabBarItem: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 0,
@@ -220,30 +240,23 @@ const styles = StyleSheet.create({
   iconContainer: {
     position: 'relative',
     paddingHorizontal: 12,
-    paddingVertical: 2,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconContainerActive: {
-    backgroundColor: (Colors.primaryAccent || '#3B82F6') + '20',
-  },
-  tabIcon: {
-    fontSize: 18,
-    opacity: 0.7,
-  },
-  tabIconActive: {
-    opacity: 1,
+    backgroundColor: '#03276214',
   },
   tabLabel: {
-    fontSize: 10,
-    color: Colors.textMuted || '#94A3B8',
+    fontSize: 11,
+    color: '#94A3B8',
     marginTop: 2,
     fontWeight: '500',
     textAlign: 'center',
   },
   tabLabelActive: {
-    color: Colors.primary || '#1E3A5F',
+    color: '#032762',
     fontWeight: '700',
   },
   badge: {

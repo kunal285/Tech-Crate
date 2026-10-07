@@ -52,6 +52,18 @@ const useWishlistStore = create((set, get) => ({
     return get().addItem(product);
   },
 
+  toggleWishlist: async product => {
+    return get().toggleItem(product);
+  },
+
+  addToWishlist: async product => {
+    return get().addItem(product);
+  },
+
+  removeFromWishlist: async productId => {
+    return get().removeItem(productId);
+  },
+
   isInWishlist: productId => {
     return get().items.some(
       i => i.product?._id === productId || i.productId === productId,

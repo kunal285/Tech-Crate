@@ -1,0 +1,205 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TechCrate E-Commerce API",
+    "version": "1.0.0",
+    "description": "Production-grade Modular Monolith REST API Gateway for TechCrate Mobile App and Admin Portal."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "sku": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "price": { "type": "number" },
+          "stock": { "type": "integer" },
+          "category": { "type": "string" },
+          "images": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "trackingNumber": { "type": "string" },
+          "orderStatus": { "type": "string" },
+          "itemsPrice": { "type": "number" },
+          "taxPrice": { "type": "number" },
+          "shippingPrice": { "type": "number" },
+          "totalPrice": { "type": "number" },
+          "isPaid": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Liveness Probe",
+        "responses": {
+          "200": { "description": "Server is UP and healthy" }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "summary": "Readiness Probe",
+        "responses": {
+          "200": { "description": "Database is connected and ready" }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Authenticate User with Email/Phone and Password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "JWT Access Token Issued" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/products": {
+      "get": {
+        "summary": "List Catalog Components with Search and Filtering",
+        "parameters": [
+          { "name": "keyword", "in": "query", "schema": { "type": "string" } },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Array of Products" }
+        }
+      }
+    },
+    "/api/products/{id}": {
+      "get": {
+        "summary": "Get Single Product Details by ID",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Product Details" },
+          "404": { "description": "Product not found" }
+        }
+      }
+    },
+    "/api/cart": {
+      "get": {
+        "summary": "Get Current Authenticated User Cart",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Cart items and totals" }
+        }
+      },
+      "post": {
+        "summary": "Add Product to Cart (Price verified on backend)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["productId", "quantity"],
+                "properties": {
+                  "productId": { "type": "string" },
+                  "quantity": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated cart" }
+        }
+      }
+    },
+    "/api/orders": {
+      "get": {
+        "summary": "List User Orders (Admin gets all orders)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Order records list" }
+        }
+      },
+      "post": {
+        "summary": "Create Order with Atomic Inventory Decrement and Server-Side Pricing",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Order created successfully" }
+        }
+      }
+    },
+    "/api/orders/{id}/cancel": {
+      "put": {
+        "summary": "Cancel Order and Restore Inventory (IDOR protected)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Order cancelled" },
+          "403": { "description": "Forbidden (Not owner)" }
+        }
+      }
+    },
+    "/api/banners": {
+      "get": {
+        "summary": "Get Dynamic Promotional Banners & Posters",
+        "responses": {
+          "200": { "description": "Active banners list" }
+        }
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "summary": "Get Aggregated Dashboard KPI Metrics",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Real-time statistics" },
+          "403": { "description": "Forbidden for non-admin" }
+        }
+      }
+    }
+  }
+}

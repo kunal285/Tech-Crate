@@ -89,7 +89,7 @@ async function runTestSuite() {
     // Create an Admin user in DB
     const adminUser = await User.create({
       name: 'System Administrator',
-      email: 'admin@projectkart.com',
+      email: 'admin@TechCrate.com',
       phone: '9999999999',
       role: 'admin',
       password: 'SuperSecretAdminPassword123!',
@@ -197,7 +197,7 @@ async function runTestSuite() {
 
     const { logoutUser } = require('../controllers/authController');
     const resMockLogout = {
-      json: (data) => {},
+      json: (data) => { },
     };
 
     await logoutUser(

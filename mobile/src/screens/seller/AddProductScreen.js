@@ -35,7 +35,7 @@ export default function AddProductScreen({ navigation }) {
         stock: Number(stock),
         images: ['https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=500&q=80'],
       });
-      Alert.alert('Success', 'Hardware component published to ProjectKart store!');
+      Alert.alert('Success', 'Hardware component published to TechCrate store!');
       navigation.goBack();
     } catch (err) {
       Alert.alert('Error', err.message);

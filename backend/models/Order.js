@@ -71,4 +71,9 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Performance Indexes
+orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ orderStatus: 1 });
+orderSchema.index({ trackingNumber: 1 });
+
 module.exports = mongoose.model('Order', orderSchema);

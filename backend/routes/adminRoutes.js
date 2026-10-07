@@ -13,13 +13,16 @@ const {
   createCategory,
   getCoupons,
   createCoupon,
+  deleteCoupon,
   getBanners,
   createBanner,
   getNotifications,
   sendNotification,
   getReviews,
   getPayments,
+  getAuditLogs,
 } = require('../controllers/adminController');
+const { getAllOrders } = require('../controllers/orderController');
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 router.use(protect);
@@ -27,6 +30,8 @@ router.use(authorizeRoles('admin'));
 
 // Stats & Dashboard
 router.get('/stats', getAdminStats);
+router.get('/orders', getAllOrders);
+router.get('/audit-logs', getAuditLogs);
 
 // Users
 router.get('/users', getUsers);
@@ -44,6 +49,7 @@ router.route('/categories').get(getCategories).post(createCategory);
 
 // Coupons
 router.route('/coupons').get(getCoupons).post(createCoupon);
+router.delete('/coupons/:id', deleteCoupon);
 
 // Banners
 router.route('/banners').get(getBanners).post(createBanner);

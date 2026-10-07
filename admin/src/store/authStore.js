@@ -1,38 +1,107 @@
 import { create } from 'zustand';
-import { authService } from '../services/authService';
+import api from '../services/api';
 
-export const useAuthStore = create((set) => ({
-  user: JSON.parse(localStorage.getItem('adminUser')) || null,
+const getInitialUser = () => {
+  try {
+    const stored = localStorage.getItem('adminUser');
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const useAuthStore = create((set, get) => ({
+  user: getInitialUser(),
+  admin: getInitialUser(),
   token: localStorage.getItem('adminToken') || null,
+  refreshToken: localStorage.getItem('adminRefreshToken') || null,
   isAuthenticated: !!localStorage.getItem('adminToken'),
   loading: false,
   error: null,
+  require2FA: false,
 
-  login: async (email, password) => {
+  login: async (email, password, { totpCode, recoveryCode } = {}) => {
     set({ loading: true, error: null });
     try {
-      const data = await authService.login(email, password);
+      const response = await api.post('/auth/login', {
+        email,
+        password,
+        totpCode,
+        recoveryCode,
+      });
+
+      const data = response.data;
+
+      // Handle 2FA Challenge if configured
+      if (data.require2FA) {
+        set({
+          require2FA: true,
+          loading: false,
+          error: data.message || 'Two-factor authentication code required.',
+        });
+        return false;
+      }
+
+      // Strict role check: Must be admin
       if (data.role !== 'admin') {
-        throw new Error('Access Denied: Only Admin role can access this web console.');
+        throw new Error('Access Denied: Only Admin role can access this administrative console.');
       }
 
       localStorage.setItem('adminToken', data.token);
+      if (data.refreshToken) {
+        localStorage.setItem('adminRefreshToken', data.refreshToken);
+      }
       localStorage.setItem('adminUser', JSON.stringify(data));
 
-      set({ user: data, token: data.token, isAuthenticated: true, loading: false });
+      set({
+        user: data,
+        admin: data,
+        token: data.token,
+        refreshToken: data.refreshToken || null,
+        isAuthenticated: true,
+        require2FA: false,
+        loading: false,
+        error: null,
+      });
       return true;
     } catch (err) {
+      const errorMsg =
+        err.response?.data?.message || err.message || 'Authentication failed. Please verify credentials.';
       set({
-        error: err.response?.data?.message || err.message || 'Login failed',
+        error: errorMsg,
         loading: false,
       });
       return false;
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    const refreshToken = localStorage.getItem('adminRefreshToken');
+    if (refreshToken) {
+      try {
+        await api.post('/auth/logout', { refreshToken });
+      } catch {
+        // Silent fallback
+      }
+    }
+
     localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminRefreshToken');
     localStorage.removeItem('adminUser');
-    set({ user: null, token: null, isAuthenticated: false });
+
+    set({
+      user: null,
+      admin: null,
+      token: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      require2FA: false,
+      loading: false,
+      error: null,
+    });
   },
+
+  clearError: () => set({ error: null }),
 }));
+
+export default useAuthStore;

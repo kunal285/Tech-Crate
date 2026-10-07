@@ -33,7 +33,7 @@ const chatAssistant = async (req, res) => {
         'Common electronics debugging check:\n1. Check baud rate matches Serial.begin(9600 or 115200)\n2. Verify pull-up resistors on I2C lines (SDA/SCL)\n3. Check GPIO pin definitions in code match physical wiring.';
       suggestedComponents = [{ name: 'Logic Analyzer 8-CH 24MHz', price: 599 }];
     } else {
-      reply = `Hello Engineer! I am ProjectKart AI. I can assist you with component selection, circuit pinouts, code snippets, and kit recommendations for your project. How can I assist you with "${message}"?`;
+      reply = `Hello Engineer! I am TechCrate AI. I can assist you with component selection, circuit pinouts, code snippets, and kit recommendations for your project. How can I assist you with "${message}"?`;
       suggestedComponents = [
         { name: 'Smart Home Automation Kit', price: 1499 },
         { name: 'Obstacle Avoiding Robot Kit', price: 1299 },

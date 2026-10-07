@@ -16,7 +16,7 @@ const RESEND_COOLDOWN_SECONDS = 30;
  * Generate Access Token (JWT)
  */
 const generateAccessToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'projectkart_jwt_secret_key_2026', {
+  return jwt.sign({ id }, process.env.JWT_SECRET || 'TechCrate_jwt_secret_key_2026', {
     expiresIn: ACCESS_TOKEN_EXPIRE,
   });
 };

@@ -17,6 +17,10 @@ const productService = {
     return await apiGet(`/products/${id}`);
   },
 
+  getProductById: async id => {
+    return await apiGet(`/products/${id}`);
+  },
+
   // Search products
   searchProducts: async (query, filters = {}) => {
     return await apiGet('/products/search', {q: query, ...filters});
@@ -29,11 +33,20 @@ const productService = {
 
   // Get trending products
   getTrending: async (limit = 10) => {
+    const res = await apiGet('/products');
+    if (res.success && Array.isArray(res.data)) {
+      return {success: true, data: {products: res.data.slice(0, limit)}};
+    }
     return await apiGet('/products/trending', {limit});
   },
 
   // Get recommended products
   getRecommended: async (limit = 10) => {
+    const res = await apiGet('/products');
+    if (res.success && Array.isArray(res.data)) {
+      const start = res.data.length > limit ? 2 : 0;
+      return {success: true, data: {products: res.data.slice(start, start + limit)}};
+    }
     return await apiGet('/products/recommended', {limit});
   },
 

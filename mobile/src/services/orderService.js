@@ -11,8 +11,17 @@ const orderService = {
     return await apiGet('/orders', params);
   },
 
+  // Alias for getting current user orders
+  getMyOrders: async (params = {}) => {
+    return await apiGet('/orders', params);
+  },
+
   // Get single order
   getOrder: async orderId => {
+    return await apiGet(`/orders/${orderId}`);
+  },
+
+  getOrderById: async orderId => {
     return await apiGet(`/orders/${orderId}`);
   },
 

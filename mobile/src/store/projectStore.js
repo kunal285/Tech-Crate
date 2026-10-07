@@ -15,14 +15,17 @@ const useProjectStore = create((set, get) => ({
     powerSupply: null,
   },
   builderResult: null,
-  isLoading: false,
-  error: null,
+  isLoadingFeatured: false,
+  featuredError: null,
 
   fetchProjects: async (params = {}) => {
     set({isLoading: true, error: null});
     const result = await projectService.getProjects(params);
     if (result.success) {
-      set({projects: result.data.projects || [], isLoading: false});
+      const items = Array.isArray(result.data)
+        ? result.data
+        : (result.data?.projects || result.data?.kits || []);
+      set({projects: items, isLoading: false});
     } else {
       set({error: result.message, isLoading: false});
     }
@@ -32,17 +35,27 @@ const useProjectStore = create((set, get) => ({
     set({isLoading: true, error: null});
     const result = await projectService.getProjectKits(params);
     if (result.success) {
-      set({projectKits: result.data.kits || [], isLoading: false});
+      const items = Array.isArray(result.data)
+        ? result.data
+        : (result.data?.kits || result.data?.projects || []);
+      set({projectKits: items, isLoading: false});
     } else {
       set({error: result.message, isLoading: false});
     }
   },
 
   fetchFeaturedKits: async () => {
+    set({isLoadingFeatured: true, featuredError: null});
     const result = await projectService.getFeaturedKits(6);
     if (result.success) {
-      set({featuredKits: result.data.kits || []});
+      const items = Array.isArray(result.data)
+        ? result.data
+        : (result.data?.kits || result.data?.projects || []);
+      set({featuredKits: items, isLoadingFeatured: false});
+    } else {
+      set({featuredError: result.message, isLoadingFeatured: false});
     }
+    return result;
   },
 
   fetchProject: async id => {

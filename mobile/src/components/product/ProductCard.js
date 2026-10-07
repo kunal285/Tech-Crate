@@ -42,7 +42,7 @@ const ProductCard = ({ product, onPress, horizontal = false, style }) => {
   if (!product) return null;
 
   const title = product.name || product.title || 'Product';
-  const brand = product.brand || (typeof product.category === 'string' ? product.category : 'ProjectKart');
+  const brand = product.brand || (typeof product.category === 'string' ? product.category : 'Tech Crate');
   const price = product.price ?? 0;
   const originalPrice = product.originalPrice;
   const discountPercent =

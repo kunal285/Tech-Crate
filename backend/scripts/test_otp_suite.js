@@ -139,7 +139,7 @@ async function runTests() {
   const adminUser = await User.create({
     name: 'Super Admin',
     phone: adminPhone,
-    email: 'admin@projectkart.com',
+    email: 'admin@TechCrate.com',
     role: 'admin',
     isPhoneVerified: true,
   });

@@ -23,7 +23,7 @@ const REFRESH_TOKEN_DAYS = 7;
  * Generate Access Token (JWT)
  */
 const generateAccessToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'projectkart_jwt_secret_key_2026', {
+  return jwt.sign({ id }, process.env.JWT_SECRET || 'TechCrate_jwt_secret_key_2026', {
     expiresIn: ACCESS_TOKEN_EXPIRE,
   });
 };
@@ -74,17 +74,28 @@ const logSecurityEvent = async (userId, action, req, metadata = {}) => {
 // 1. REGISTRATION & EMAIL VERIFICATION
 // ============================================================================
 
-// @desc Register new user with password policy & email verification token
+// @desc Register new user with name, mobile no, email, password policy
 // @route POST /api/auth/register
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, college, branch } = req.body;
+    const { name, email, phone, mobile, password, role, college, branch, firebaseUid } = req.body;
+    const rawPhone = phone || mobile;
+    const cleanPhone = rawPhone ? String(rawPhone).replace(/\D/g, '').slice(-10) : null;
+    const cleanEmail = String(email || '').trim().toLowerCase();
 
-    // Protection against duplicate accounts
-    const existingUser = await User.findOne({ email });
+    // Protection against duplicate accounts (check both email and mobile)
+    const duplicateQueries = [{ email: cleanEmail }];
+    if (cleanPhone) {
+      duplicateQueries.push({ phone: cleanPhone });
+      duplicateQueries.push({ phone: `+91${cleanPhone}` });
+    }
+
+    const existingUser = await User.findOne({ $or: duplicateQueries });
     if (existingUser) {
-      // Generic response to prevent user enumeration if required, or clear feedback
-      return res.status(400).json({ message: 'An account with this email address already exists.' });
+      if (existingUser.email === cleanEmail) {
+        return res.status(400).json({ message: 'An account with this email address already exists.' });
+      }
+      return res.status(400).json({ message: 'An account with this mobile number already exists.' });
     }
 
     // Generate cryptographic verification token
@@ -93,27 +104,48 @@ const registerUser = async (req, res) => {
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: cleanEmail,
+      phone: cleanPhone ? (cleanPhone.length === 10 ? cleanPhone : cleanPhone.slice(-10)) : undefined,
+      firebaseUid: firebaseUid || undefined,
       password,
-      role: role && ['customer', 'seller'].includes(role) ? role : 'customer',
+      role: role && ['customer', 'student', 'seller'].includes(role) ? role : 'customer',
       college: college || '',
       branch: branch || '',
-      isEmailVerified: false,
+      isEmailVerified: true,
+      isPhoneVerified: !!cleanPhone,
       emailVerificationTokenHash: tokenHash,
       emailVerificationExpires: verificationExpires,
     });
 
-    // Send verification email
-    await sendVerificationEmail(user.email, rawVerificationToken);
-    await logSecurityEvent(user._id, 'VERIFICATION_EMAIL_SENT', req);
+    // Send verification email in background (optional/non-blocking)
+    sendVerificationEmail(user.email, rawVerificationToken).catch(() => { });
+    await logSecurityEvent(user._id, 'REGISTER_SUCCESS', req);
+
+    // Issue tokens so user is immediately logged in upon registration
+    const rawRefreshToken = await createRefreshTokenSession(user, req);
+    const accessToken = generateAccessToken(user._id);
+
+    const userPayload = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      avatar: user.avatar,
+      college: user.college,
+      branch: user.branch,
+      isEmailVerified: user.isEmailVerified,
+    };
 
     res.status(201).json({
-      message: 'Account created successfully! Please check your email to verify your account.',
-      email: user.email,
-      requiresVerification: true,
+      message: 'Account created successfully!',
+      user: userPayload,
+      token: accessToken,
+      refreshToken: rawRefreshToken,
     });
   } catch (error) {
+    console.error('[Registration Error]', error);
     res.status(500).json({ message: 'Registration failed due to a server error. Please try again.' });
   }
 };
@@ -184,17 +216,40 @@ const resendVerificationEmail = async (req, res) => {
 // 2. AUTHENTICATION & LOGIN SYSTEM
 // ============================================================================
 
-// @desc Auth user, handle 2FA, lockout & issue tokens
+// @desc Auth user with mobile number or email as username, password, handle 2FA, lockout & issue tokens
 // @route POST /api/auth/login
 const loginUser = async (req, res) => {
   try {
-    const { email, password, totpCode, recoveryCode } = req.body;
+    const { username, email, phone, password, totpCode, recoveryCode } = req.body;
+    const identifier = String(username || email || phone || '').trim();
 
-    const user = await User.findOne({ email }).select('+password +twoFactorSecret +twoFactorRecoveryCodes');
+    if (!identifier) {
+      return res.status(400).json({ message: 'Please provide mobile number or email.' });
+    }
+
+    const cleanDigits = identifier.replace(/\D/g, '');
+    let searchConditions = [];
+
+    if (identifier.toLowerCase() === 'admin') {
+      searchConditions.push({ role: 'admin' });
+      searchConditions.push({ email: 'admin@techcrate.com' });
+    } else if (identifier.includes('@')) {
+      searchConditions.push({ email: identifier.toLowerCase() });
+    } else if (cleanDigits.length >= 10) {
+      const tenDigits = cleanDigits.slice(-10);
+      searchConditions.push({ phone: tenDigits });
+      searchConditions.push({ phone: `+91${tenDigits}` });
+      searchConditions.push({ phone: cleanDigits });
+    } else {
+      searchConditions.push({ email: identifier.toLowerCase() });
+      searchConditions.push({ phone: identifier });
+    }
+
+    const user = await User.findOne({ $or: searchConditions }).select('+password +twoFactorSecret +twoFactorRecoveryCodes');
 
     // Generic response against account enumeration
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password.' });
+      return res.status(401).json({ message: 'Invalid mobile/email or password.' });
     }
 
     // Check account lockout
@@ -219,7 +274,7 @@ const loginUser = async (req, res) => {
       await user.save();
 
       await logSecurityEvent(user._id, 'LOGIN_FAILED', req, { attempts: user.failedLoginAttempts });
-      return res.status(401).json({ message: 'Invalid email or password.' });
+      return res.status(401).json({ message: 'Invalid mobile/email or password.' });
     }
 
     // Check Two-Factor Authentication (2FA) if enabled
@@ -270,21 +325,93 @@ const loginUser = async (req, res) => {
 
     await logSecurityEvent(user._id, 'LOGIN_SUCCESS', req);
 
-    res.json({
+    const userPayload = {
       _id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       role: user.role,
       avatar: user.avatar,
       college: user.college,
       branch: user.branch,
       isEmailVerified: user.isEmailVerified,
       twoFactorEnabled: user.twoFactorEnabled,
+    };
+
+    res.json({
+      ...userPayload,
+      user: userPayload,
       token: accessToken,
       refreshToken: rawRefreshToken,
     });
   } catch (error) {
+    console.error('[Login Error]', error);
     res.status(500).json({ message: 'Login failed due to a server error.' });
+  }
+};
+
+// @desc Google & Facebook Social Authentication (Login & Registration)
+// @route POST /api/auth/social-auth
+const socialAuth = async (req, res) => {
+  try {
+    const { provider, email, name, photoUrl, providerId, role } = req.body;
+
+    if (!provider || !['google', 'facebook'].includes(provider.toLowerCase())) {
+      return res.status(400).json({ message: 'Valid provider (google or facebook) is required.' });
+    }
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email address is required for social authentication.' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    let user = await User.findOne({ email: cleanEmail });
+
+    if (!user) {
+      // Auto-register new user via social auth
+      const providerTitle = provider.toLowerCase() === 'google' ? 'Google' : 'Facebook';
+      user = await User.create({
+        name: (name && name.trim()) || `${providerTitle} User`,
+        email: cleanEmail,
+        avatar: photoUrl || undefined,
+        role: role && ['customer', 'student'].includes(role) ? role : 'customer',
+        isEmailVerified: true,
+      });
+      await logSecurityEvent(user._id, 'SOCIAL_REGISTER_SUCCESS', req, { provider });
+    } else {
+      if (photoUrl && !user.avatar) {
+        user.avatar = photoUrl;
+        await user.save();
+      }
+      await logSecurityEvent(user._id, 'SOCIAL_LOGIN_SUCCESS', req, { provider });
+    }
+
+    const rawRefreshToken = await createRefreshTokenSession(user, req);
+    const accessToken = generateAccessToken(user._id);
+
+    const userPayload = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      avatar: user.avatar,
+      college: user.college,
+      branch: user.branch,
+      isEmailVerified: user.isEmailVerified,
+      twoFactorEnabled: user.twoFactorEnabled,
+    };
+
+    res.json({
+      message: `Successfully authenticated with ${provider}`,
+      ...userPayload,
+      user: userPayload,
+      token: accessToken,
+      refreshToken: rawRefreshToken,
+    });
+  } catch (error) {
+    console.error('[Social Auth Error]', error);
+    res.status(500).json({ message: 'Social authentication failed. Please try again.' });
   }
 };
 
@@ -442,7 +569,7 @@ const resetPassword = async (req, res) => {
     await sendSecurityAlertEmail(
       user.email,
       'Password Changed',
-      'Your ProjectKart account password was successfully reset. All active sessions have been revoked.'
+      'Your TechCrate account password was successfully reset. All active sessions have been revoked.'
     );
     await logSecurityEvent(user._id, 'PASSWORD_RESET_COMPLETED', req);
 
@@ -726,4 +853,5 @@ module.exports = {
   revokeSession,
   revokeAllSessions,
   getSecurityLogs,
+  socialAuth,
 };

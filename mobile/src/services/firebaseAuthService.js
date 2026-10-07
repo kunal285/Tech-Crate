@@ -37,8 +37,30 @@ export const maskPhoneNumber = (phone) => {
  * User-friendly mapping for Firebase Identity Toolkit errors
  */
 const mapFirebaseError = (errorMessage) => {
-  if (!errorMessage) return 'Verification failed. Please try again.';
+  if (!errorMessage) return 'Authentication failed. Please try again.';
 
+  if (errorMessage.includes('EMAIL_EXISTS')) {
+    return 'Email is already registered. Please login instead.';
+  }
+  if (
+    errorMessage.includes('INVALID_LOGIN_CREDENTIALS') ||
+    errorMessage.includes('INVALID_PASSWORD') ||
+    errorMessage.includes('EMAIL_NOT_FOUND')
+  ) {
+    return 'Invalid email or password.';
+  }
+  if (errorMessage.includes('WEAK_PASSWORD')) {
+    return 'Password is too weak. Please use at least 6 characters.';
+  }
+  if (errorMessage.includes('USER_DISABLED')) {
+    return 'This account has been disabled. Please contact support.';
+  }
+  if (errorMessage.includes('INVALID_EMAIL')) {
+    return 'Please enter a valid email address.';
+  }
+  if (errorMessage.includes('OPERATION_NOT_ALLOWED')) {
+    return 'Email/Password sign-in is not enabled in Firebase Console.';
+  }
   if (errorMessage.includes('INVALID_PHONE_NUMBER')) {
     return 'Enter a valid mobile number.';
   }
@@ -55,10 +77,13 @@ const mapFirebaseError = (errorMessage) => {
     return 'Authentication session has expired. Please request a new code.';
   }
   if (errorMessage.includes('BILLING_NOT_ENABLED') || errorMessage.includes('PROJECT_NOT_FOUND')) {
-    return 'Firebase Phone Auth is not activated on this Firebase Project. Please check Firebase Console.';
+    return 'Firebase Phone Auth: Please add this number under "Phone numbers for testing" in Firebase Console or enable billing.';
   }
   if (errorMessage.includes('CAPTCHA_CHECK_FAILED')) {
     return 'reCAPTCHA check failed. Please try again.';
+  }
+  if (errorMessage.includes('APP_CHECK')) {
+    return 'Firebase App Check token is invalid. Please disable App Check enforcement for Authentication in Firebase Console or configure Play Integrity.';
   }
 
   return errorMessage.replace(/_/g, ' ').toLowerCase();
@@ -66,6 +91,156 @@ const mapFirebaseError = (errorMessage) => {
 
 const firebaseAuthService = {
   isFirebaseConfigured,
+
+  /**
+   * Register a new user with Firebase using Email and Password
+   * @param {string} email
+   * @param {string} password
+   * @param {string} displayName
+   * @returns {Promise<{success: boolean, uid?: string, idToken?: string, refreshToken?: string, email?: string, message?: string}>}
+   */
+  createUserWithEmailAndPassword: async (email, password, displayName = '') => {
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      return {
+        success: false,
+        message: 'Please provide both email and password.',
+      };
+    }
+
+    if (!isFirebaseConfigured()) {
+      return {
+        success: false,
+        message: 'Firebase configuration is missing.',
+        unconfigured: true,
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `${IDENTITY_TOOLKIT_URL}:signUp?key=${firebaseConfig.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password,
+            returnSecureToken: true,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        const errorMsg = data.error?.message || 'Failed to create user in Firebase';
+        return {
+          success: false,
+          message: mapFirebaseError(errorMsg),
+          rawError: errorMsg,
+        };
+      }
+
+      // If displayName is provided, update Firebase user profile
+      if (displayName && data.idToken) {
+        try {
+          await fetch(
+            `${IDENTITY_TOOLKIT_URL}:update?key=${firebaseConfig.apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                idToken: data.idToken,
+                displayName: displayName.trim(),
+                returnSecureToken: true,
+              }),
+            }
+          );
+        } catch {
+          // Non-critical profile update failure
+        }
+      }
+
+      return {
+        success: true,
+        uid: data.localId,
+        idToken: data.idToken,
+        refreshToken: data.refreshToken,
+        email: data.email || cleanEmail,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: 'Unable to create account. Please check your internet connection.',
+        error: err.message,
+      };
+    }
+  },
+
+  /**
+   * Authenticate user with Firebase using Email and Password
+   * @param {string} email
+   * @param {string} password
+   * @returns {Promise<{success: boolean, uid?: string, idToken?: string, refreshToken?: string, email?: string, displayName?: string, message?: string}>}
+   */
+  signInWithEmailAndPassword: async (email, password) => {
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      return {
+        success: false,
+        message: 'Please provide both email and password.',
+      };
+    }
+
+    if (!isFirebaseConfigured()) {
+      return {
+        success: false,
+        message: 'Firebase configuration is missing.',
+        unconfigured: true,
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `${IDENTITY_TOOLKIT_URL}:signInWithPassword?key=${firebaseConfig.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password,
+            returnSecureToken: true,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        const errorMsg = data.error?.message || 'Authentication failed';
+        return {
+          success: false,
+          message: mapFirebaseError(errorMsg),
+          rawError: errorMsg,
+        };
+      }
+
+      return {
+        success: true,
+        uid: data.localId,
+        idToken: data.idToken,
+        refreshToken: data.refreshToken,
+        email: data.email || cleanEmail,
+        displayName: data.displayName || '',
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: 'Unable to login. Please check your internet connection.',
+        error: err.message,
+      };
+    }
+  },
 
   /**
    * Request Firebase to send SMS OTP to recipient phone number

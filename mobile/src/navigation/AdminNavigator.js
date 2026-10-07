@@ -14,6 +14,7 @@ import AdminOrdersScreen from '../screens/admin/AdminOrdersScreen';
 import AdminCategoriesScreen from '../screens/admin/AdminCategoriesScreen';
 import AdminCouponsScreen from '../screens/admin/AdminCouponsScreen';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
+import ProductDetailScreen from '../screens/products/ProductDetailScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,6 +34,7 @@ const DashboardStack = () => (
   <Stack.Navigator screenOptions={{headerShown: false}}>
     <Stack.Screen name="AdminDashboardMain" component={AdminDashboardScreen} />
     <Stack.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />
+    <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
   </Stack.Navigator>
 );
 
@@ -47,6 +49,7 @@ const ProductsStack = () => (
   <Stack.Navigator screenOptions={{headerShown: false}}>
     <Stack.Screen name="AdminProductsMain" component={AdminProductsScreen} />
     <Stack.Screen name="AdminCategories" component={AdminCategoriesScreen} />
+    <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
   </Stack.Navigator>
 );
 

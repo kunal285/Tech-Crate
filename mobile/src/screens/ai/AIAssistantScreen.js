@@ -18,7 +18,7 @@ export default function AIAssistantScreen() {
   const [messages, setMessages] = useState([
     {
       sender: 'ai',
-      text: 'Hello Maker! I am ProjectKart AI. Ask me anything about microcontroller pinouts, sensor wiring, code troubleshooting, or project kit selection!',
+      text: 'Hello Maker! I am TechCrate AI. Ask me anything about microcontroller pinouts, sensor wiring, code troubleshooting, or project kit selection!',
     },
   ]);
   const [input, setInput] = useState('');
@@ -56,7 +56,7 @@ export default function AIAssistantScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="ProjectKart AI Assistant" />
+      <Header title="TechCrate AI Assistant" />
 
       <ScrollView contentContainerStyle={styles.chatContent}>
         {messages.map((msg, idx) => (

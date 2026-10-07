@@ -13,7 +13,7 @@ const REFRESH_TOKEN_DAYS = 7;
  * Generate Access Token (JWT)
  */
 const generateAccessToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'projectkart_jwt_secret_key_2026', {
+  return jwt.sign({ id }, process.env.JWT_SECRET || 'TechCrate_jwt_secret_key_2026', {
     expiresIn: ACCESS_TOKEN_EXPIRE,
   });
 };
@@ -177,7 +177,7 @@ const firebaseLogin = async (req, res) => {
       await user.save();
     }
 
-    // 5. Create secure ProjectKart application session
+    // 5. Create secure TechCrate application session
     const rawRefreshToken = await createRefreshTokenSession(user, req);
     const accessToken = generateAccessToken(user._id);
 

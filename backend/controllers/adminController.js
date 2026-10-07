@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const ProjectKit = require('../models/ProjectKit');
 const Seller = require('../models/Seller');
+const Poster = require('../models/Poster');
 const {
   liveCategories,
   liveCoupons,
@@ -165,37 +166,141 @@ const rejectSeller = async (req, res) => {
   }
 };
 
-// @desc Categories management
+const Coupon = require('../models/Coupon');
+const Category = require('../models/Category');
+
+// @desc Categories management directly from MongoDB
 const getCategories = async (req, res) => {
-  res.json(categoriesList);
+  try {
+    let categories = await Category.find({}).sort({ name: 1 });
+    if (!categories || categories.length === 0) {
+      // Seed live categories if DB collection is empty
+      const inserted = await Category.insertMany(
+        liveCategories.map((c) => ({
+          name: c.name,
+          icon: c.icon || 'Cpu',
+          count: c.count || 0,
+          active: true,
+        }))
+      ).catch(() => []);
+      categories = inserted.length ? inserted : liveCategories;
+    }
+    res.json(categories);
+  } catch (error) {
+    res.json(liveCategories);
+  }
 };
 
 const createCategory = async (req, res) => {
-  const newCat = { _id: 'cat_' + Date.now(), name: req.body.name, icon: 'Cpu', count: 0, active: true };
-  categoriesList.push(newCat);
-  res.status(201).json(newCat);
+  try {
+    const { name, icon, color } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Category name is required' });
+    }
+    const category = await Category.create({
+      name: name.trim(),
+      icon: icon || 'Cpu',
+      color: color || '#032762',
+      active: true,
+    });
+    res.status(201).json(category);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 };
 
-// @desc Coupons management
+// @desc Coupons management directly from MongoDB
 const getCoupons = async (req, res) => {
-  res.json(couponsList);
+  try {
+    let coupons = await Coupon.find({}).sort({ createdAt: -1 });
+    if (!coupons || coupons.length === 0) {
+      const inserted = await Coupon.insertMany(
+        liveCoupons.map((cp) => ({
+          code: cp.code.toUpperCase(),
+          discountType: cp.discountType || 'percentage',
+          discountValue: cp.discountValue || 15,
+          minOrder: cp.minOrder || 0,
+          maxDiscount: cp.maxDiscount || null,
+          usageLimit: cp.usageLimit || 100,
+          active: true,
+        }))
+      ).catch(() => []);
+      coupons = inserted.length ? inserted : liveCoupons;
+    }
+    res.json(coupons);
+  } catch (error) {
+    res.json(liveCoupons);
+  }
 };
 
 const createCoupon = async (req, res) => {
-  const newCoupon = { _id: 'cp_' + Date.now(), ...req.body, active: true, usageCount: 0 };
-  couponsList.push(newCoupon);
-  res.status(201).json(newCoupon);
+  try {
+    const { code, discountType, discountValue, minOrder, maxDiscount, usageLimit, expiryDate } = req.body;
+    if (!code || !code.trim()) {
+      return res.status(400).json({ message: 'Coupon code is required' });
+    }
+    const cleanCode = code.toUpperCase().trim();
+    const existing = await Coupon.findOne({ code: cleanCode });
+    if (existing) {
+      return res.status(400).json({ message: `Coupon '${cleanCode}' already exists` });
+    }
+    const coupon = await Coupon.create({
+      code: cleanCode,
+      discountType: discountType || 'percentage',
+      discountValue: Number(discountValue),
+      minOrder: Number(minOrder || 0),
+      maxDiscount: maxDiscount ? Number(maxDiscount) : null,
+      usageLimit: usageLimit ? Number(usageLimit) : 100,
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      active: true,
+    });
+    res.status(201).json(coupon);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+const deleteCoupon = async (req, res) => {
+  try {
+    const coupon = await Coupon.findById(req.params.id);
+    if (coupon) {
+      await coupon.deleteOne();
+      return res.json({ message: 'Coupon deleted successfully' });
+    }
+    res.status(404).json({ message: 'Coupon not found' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // @desc Banners management
 const getBanners = async (req, res) => {
-  res.json(bannersList);
+  try {
+    const posters = await Poster.find().sort({ displayOrder: 1, createdAt: -1 });
+    res.json(posters);
+  } catch (err) {
+    res.json(bannersList);
+  }
 };
 
 const createBanner = async (req, res) => {
-  const newBanner = { _id: 'b_' + Date.now(), ...req.body, active: true };
-  bannersList.push(newBanner);
-  res.status(201).json(newBanner);
+  try {
+    const poster = await Poster.create({
+      imageUrl: req.body.image || req.body.imageUrl,
+      title: req.body.title || 'Promotional Banner',
+      linkType: req.body.linkType || 'none',
+      linkValue: req.body.linkValue || '',
+      isActive: req.body.isActive !== undefined ? req.body.isActive : true,
+      displayOrder: req.body.displayOrder || 0,
+      startDate: req.body.startDate || null,
+      endDate: req.body.endDate || null,
+    });
+    res.status(201).json(poster);
+  } catch (err) {
+    const newBanner = { _id: 'b_' + Date.now(), ...req.body, active: true };
+    bannersList.push(newBanner);
+    res.status(201).json(newBanner);
+  }
 };
 
 // @desc Notifications management
@@ -253,6 +358,17 @@ const getPayments = async (req, res) => {
   }
 };
 
+// @desc Get administrative audit logs
+const getAuditLogs = async (req, res) => {
+  try {
+    const AuditLog = require('../models/AuditLog');
+    const logs = await AuditLog.find({}).sort({ createdAt: -1 }).limit(100);
+    res.json({ success: true, count: logs.length, logs });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAdminStats,
   getUsers,
@@ -266,10 +382,12 @@ module.exports = {
   createCategory,
   getCoupons,
   createCoupon,
+  deleteCoupon,
   getBanners,
   createBanner,
   getNotifications,
   sendNotification,
   getReviews,
   getPayments,
+  getAuditLogs,
 };

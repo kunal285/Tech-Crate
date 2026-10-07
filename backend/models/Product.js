@@ -20,10 +20,20 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    discountedPrice: {
+      type: Number,
+      default: 0,
+    },
     discountPercentage: {
       type: Number,
       default: 0,
     },
+    features: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     category: {
       type: String,
       required: [true, 'Category is required'],
@@ -77,6 +87,12 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    sku: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
     datasheetUrl: {
       type: String,
       default: '',
@@ -84,5 +100,10 @@ const productSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Performance & Search Indexes
+productSchema.index({ title: 'text', description: 'text', sku: 'text' });
+productSchema.index({ category: 1, price: 1 });
+productSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Product', productSchema);
