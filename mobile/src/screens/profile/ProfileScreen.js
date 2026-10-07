@@ -64,13 +64,13 @@ export default function ProfileScreen({ navigation }) {
 
   const handleCallSupport = () => {
     Linking.openURL('tel:+918005553420').catch(() => {
-      Alert.alert('ProjectKart Helpline', 'Contact us at: +91 800 555 3420');
+      Alert.alert('TechCrate Helpline', 'Contact us at: +91 800 555 3420');
     });
   };
 
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@projectkart.com?subject=ProjectKart Mobile App Inquiry').catch(() => {
-      Alert.alert('ProjectKart Support', 'Email us at: support@projectkart.com');
+    Linking.openURL('mailto:support@TechCrate.com?subject=TechCrate Mobile App Inquiry').catch(() => {
+      Alert.alert('TechCrate Support', 'Email us at: support@TechCrate.com');
     });
   };
 
@@ -118,7 +118,7 @@ export default function ProfileScreen({ navigation }) {
   ];
 
   const displayName = user?.name || user?.fullName || 'Maker Engineer';
-  const displayEmail = user?.email || 'maker@projectkart.com';
+  const displayEmail = user?.email || 'maker@TechCrate.com';
   const displayPhone = user?.phone || user?.phoneNumber || '+91 98765 43210';
   const userRole = (user?.role || 'Customer').toUpperCase();
 
@@ -230,7 +230,7 @@ export default function ProfileScreen({ navigation }) {
               accessibilityLabel="Email support"
             >
               <Mail size={14} color="#0284C7" />
-              <Text style={styles.contactBtnText}>support@projectkart.com</Text>
+              <Text style={styles.contactBtnText}>support@TechCrate.com</Text>
             </TouchableOpacity>
           </View>
         </View>

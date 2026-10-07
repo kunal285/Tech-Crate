@@ -4,7 +4,7 @@ import {STORAGE_KEYS} from '../constants';
 import firebaseAuthService from './firebaseAuthService';
 
 const authService = {
-  // Firebase Phone Auth - Exchange Verified ID Token for Backend Session
+  // Firebase Auth - Exchange Verified ID Token for Backend Session
   firebaseLogin: async authPayload => {
     const result = await apiPost('/auth/firebase-login', authPayload);
     if (result.success && result.data?.token) {
@@ -18,7 +18,7 @@ const authService = {
     return result;
   },
 
-  // Firebase Phone Auth - Register with Verified ID Token
+  // Firebase Auth - Register with Verified ID Token
   firebaseRegister: async registerPayload => {
     const result = await apiPost('/auth/firebase-register', registerPayload);
     if (result.success && result.data?.token) {
@@ -32,36 +32,11 @@ const authService = {
     return result;
   },
 
-  // Send 6-Digit SMS OTP to Mobile Number (Direct SMS fallback)
-  sendOtp: async phoneNumber => {
-    return await apiPost('/auth/send-otp', {phoneNumber});
-  },
-
-  // Verify 6-Digit OTP & Initialize Session (Direct SMS fallback)
-  verifyOtp: async otpData => {
-    const result = await apiPost('/auth/verify-otp', otpData);
-    if (result.success && result.data?.token) {
-      const userObj = result.data.user || result.data;
-      await authService.persistSession(
-        result.data.token,
-        userObj,
-        result.data.refreshToken
-      );
-    }
-    return result;
-  },
-
-  // Resend 6-Digit OTP
-  resendOtp: async phoneNumber => {
-    return await apiPost('/auth/resend-otp', {phoneNumber});
-  },
-
-  // Register user with Firebase Auth + Database Profile
+  // Register user with Email/Password + Profile
   register: async userData => {
     let fbUid = null;
     let fbIdToken = null;
 
-    // 1. Firebase createUserWithEmailAndPassword (optional sync)
     if (userData.email && userData.password && firebaseAuthService.isFirebaseConfigured()) {
       try {
         const fbResult = await firebaseAuthService.createUserWithEmailAndPassword(
@@ -76,7 +51,6 @@ const authService = {
         } else if (fbResult.rawError?.includes('EMAIL_EXISTS')) {
           return fbResult;
         } else {
-          // App Check or config block: log warning and proceed to backend database registration
           console.warn('[Firebase Auth Register Bypass]', fbResult.message);
         }
       } catch (fbErr) {
@@ -84,7 +58,6 @@ const authService = {
       }
     }
 
-    // 2. Persist user in database
     const payload = {
       ...userData,
       firebaseUid: fbUid,
@@ -103,15 +76,14 @@ const authService = {
     return result;
   },
 
-  // Login user (Firebase Email/Password or Phone/Password)
+  // Login user with Email/Password
   login: async credentials => {
-    const rawUsername = String(credentials.username || '').trim();
+    const rawUsername = String(credentials.username || credentials.email || '').trim();
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawUsername);
 
     let fbUid = null;
     let fbIdToken = null;
 
-    // 1. If username is an email address, try Firebase first (optional sync)
     if (isEmail && credentials.password && firebaseAuthService.isFirebaseConfigured()) {
       try {
         const fbResult = await firebaseAuthService.signInWithEmailAndPassword(
@@ -123,7 +95,6 @@ const authService = {
           fbUid = fbResult.uid;
           fbIdToken = fbResult.idToken;
         } else {
-          // If App Check or Firebase fails, continue to backend authentication
           console.warn('[Firebase Auth Login Bypass]', fbResult.message);
         }
       } catch (fbErr) {
@@ -131,7 +102,6 @@ const authService = {
       }
     }
 
-    // 2. Authenticate / synchronize with backend
     const payload = {
       ...credentials,
       firebaseUid: fbUid,

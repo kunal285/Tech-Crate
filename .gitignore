@@ -44,6 +44,8 @@ coverage/
 *.apk
 *.aab
 *.keystore
+*.jks
+key.properties
 !debug.keystore
 .kotlin/
 **/.kotlin/

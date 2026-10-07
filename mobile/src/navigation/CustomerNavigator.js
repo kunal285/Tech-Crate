@@ -25,9 +25,11 @@ import ProfileScreen from '../screens/profile/ProfileScreen';
 import AddressScreen from '../screens/profile/AddressScreen';
 import AddAddressScreen from '../screens/profile/AddAddressScreen';
 import NotificationsScreen from '../screens/profile/NotificationsScreen';
-import CheckoutScreen from '../screens/checkout/CheckoutScreen';
+import CheckoutScreen from '../screens/cart/CheckoutScreen';
 import PaymentScreen from '../screens/checkout/PaymentScreen';
 import OrderSuccessScreen from '../screens/checkout/OrderSuccessScreen';
+import PaymentProcessingScreen from '../screens/checkout/PaymentProcessingScreen';
+import PaymentResultScreen from '../screens/checkout/PaymentResultScreen';
 import AIAssistantScreen from '../screens/ai/AIAssistantScreen';
 import ReviewsScreen from '../screens/products/ReviewsScreen';
 import WriteReviewScreen from '../screens/products/WriteReviewScreen';
@@ -108,6 +110,8 @@ const CartStack = () => (
     <Stack.Screen name="CartMain" component={CartScreen} />
     <Stack.Screen name="Checkout" component={CheckoutScreen} />
     <Stack.Screen name="Payment" component={PaymentScreen} />
+    <Stack.Screen name="PaymentProcessing" component={PaymentProcessingScreen} />
+    <Stack.Screen name="PaymentResult" component={PaymentResultScreen} />
     <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />
     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
     <Stack.Screen name="Wishlist" component={WishlistScreen} />

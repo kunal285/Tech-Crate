@@ -95,8 +95,8 @@ export default function OrderDetailsScreen({ route, navigation }) {
 
   const handleSupportEmail = () => {
     const subject = encodeURIComponent(`Inquiry for Order #${order?.trackingNumber || activeOrderId}`);
-    Linking.openURL(`mailto:support@projectkart.com?subject=${subject}`).catch(() => {
-      Alert.alert('Support Email', 'Email us at support@projectkart.com');
+    Linking.openURL(`mailto:support@TechCrate.com?subject=${subject}`).catch(() => {
+      Alert.alert('Support Email', 'Email us at support@TechCrate.com');
     });
   };
 

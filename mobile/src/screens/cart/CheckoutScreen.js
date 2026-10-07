@@ -15,14 +15,13 @@ import {
   ShieldCheck,
   Truck,
   ArrowRight,
-  Sparkles,
 } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
-import Button from '../../components/common/Button';
 import { Colors } from '../../theme';
 import { useCartStore } from '../../store/cartStore';
 import { orderService } from '../../services/orderService';
+import paymentService from '../../services/paymentService';
 
 export default function CheckoutScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -67,7 +66,7 @@ export default function CheckoutScreen({ route, navigation }) {
   };
 
   const handlePlaceOrder = async () => {
-    if (loading) return; // Duplicate submission prevention
+    if (loading) return;
     if (!validate()) {
       Alert.alert('Delivery Details Required', 'Please fill in all delivery address fields accurately.');
       return;
@@ -113,20 +112,40 @@ export default function CheckoutScreen({ route, navigation }) {
       }
 
       const createdOrder = res.data?.order || res.data || res;
-      const trackingNumber =
-        createdOrder.trackingNumber ||
-        res.trackingNumber ||
-        `PK${Math.floor(10000000 + Math.random() * 90000000)}`;
+      const targetOrderId = createdOrder._id || createdOrder.order_id;
 
-      if (typeof clearCart === 'function') {
-        await clearCart();
+      if (paymentMethod === 'COD') {
+        if (typeof clearCart === 'function') {
+          await clearCart();
+        }
+        navigation.replace('OrderSuccess', {
+          order: createdOrder,
+          orderId: targetOrderId,
+          trackingNumber: createdOrder.trackingNumber,
+          grandTotal,
+        });
+        return;
       }
 
-      navigation.replace('OrderSuccess', {
-        order: createdOrder,
-        orderId: createdOrder._id,
-        trackingNumber,
-        grandTotal,
+      // Online Payment Gateway (UPI / Card / NetBanking)
+      const paymentIntentRes = await paymentService.createOrder({
+        amount: grandTotal,
+        currency: 'INR',
+        order_id: String(targetOrderId),
+        redirect_url: 'TechCrate://payment/success',
+        webhook_url: 'http://localhost:5000/api/webhooks/payment',
+      });
+
+      const paymentUrl = paymentIntentRes?.payment_url;
+      if (paymentUrl) {
+        // Open payment gateway browser / native intent
+        await paymentService.openPaymentGateway(paymentUrl);
+      }
+
+      // Navigate to Payment Processing screen awaiting deep link or webhook verification
+      navigation.replace('PaymentProcessing', {
+        order_id: targetOrderId,
+        orderId: targetOrderId,
       });
     } catch (error) {
       Alert.alert('Order Placement Error', error.message || 'Error processing your order');
@@ -226,7 +245,7 @@ export default function CheckoutScreen({ route, navigation }) {
           </View>
 
           {[
-            { id: 'UPI', label: 'Instant UPI (Google Pay, PhonePe, Paytm)' },
+            { id: 'UPI', label: 'Instant Auto UPI (Google Pay, PhonePe, Paytm)' },
             { id: 'Card', label: 'Debit / Credit Card (Visa, MasterCard, RuPay)' },
             { id: 'NetBanking', label: 'Net Banking (All Indian Banks)' },
             { id: 'COD', label: 'Cash on Delivery (COD)' },
@@ -311,7 +330,7 @@ export default function CheckoutScreen({ route, navigation }) {
           accessibilityLabel="Pay and Confirm Order"
         >
           <Text style={styles.confirmBtnText}>
-            {loading ? 'Processing...' : 'Pay & Confirm'}
+            {loading ? 'Initializing Gateway...' : 'Pay & Confirm'}
           </Text>
           {!loading && <ArrowRight size={17} color="#FFFFFF" />}
         </TouchableOpacity>

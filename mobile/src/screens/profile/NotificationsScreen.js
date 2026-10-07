@@ -26,7 +26,7 @@ export default function NotificationsScreen({ navigation }) {
     {
       id: 'notif_1',
       title: 'Order Dispatched 🚚',
-      body: 'Your ProjectKart package with Arduino Uno & Sensor Kit has been shipped via Express delivery.',
+      body: 'Your TechCrate package with Arduino Uno & Sensor Kit has been shipped via Express delivery.',
       type: 'order',
       date: '2 hours ago',
       read: false,
@@ -41,7 +41,7 @@ export default function NotificationsScreen({ navigation }) {
     },
     {
       id: 'notif_3',
-      title: 'Welcome to ProjectKart! ⚡',
+      title: 'Welcome to TechCrate! ⚡',
       body: 'Explore hardware components, verify microcontroller pinouts and build engineering projects.',
       type: 'system',
       date: '3 days ago',

@@ -1,48 +1,38 @@
+import { Linking } from 'react-native';
 import { apiGet, apiPost } from './api';
 
 const paymentService = {
-  // Create Razorpay order
-  createRazorpayOrder: async orderData => {
+  // Create Order API (POST /api/orders/create)
+  createOrder: async (orderData) => {
+    return await apiPost('/orders/create', orderData);
+  },
+
+  // Create payment order alias (POST /api/payments/create-order)
+  createPaymentOrder: async (orderData) => {
     return await apiPost('/payments/create-order', orderData);
   },
 
-  // Verify payment on backend
-  verifyPayment: async paymentData => {
-    return await apiPost('/payments/verify', paymentData);
+  // GET Server-Authoritative Payment Status (GET /api/payments/:order_id/status)
+  getPaymentStatus: async (order_id) => {
+    return await apiGet(`/payments/${order_id}/status`);
   },
 
-  // Get payment details
-  getPayment: async paymentId => {
-    return await apiGet(`/payments/${paymentId}`);
+  // Open Payment Gateway in native browser / intent URL
+  openPaymentGateway: async (paymentUrl) => {
+    if (!paymentUrl) {
+      throw new Error('Invalid payment gateway URL.');
+    }
+    const canOpen = await Linking.canOpenURL(paymentUrl).catch(() => true);
+    if (canOpen) {
+      return await Linking.openURL(paymentUrl);
+    } else {
+      throw new Error('Unable to open payment browser.');
+    }
   },
 
   // Get payment history
   getPaymentHistory: async (params = {}) => {
     return await apiGet('/payments/history', params);
-  },
-
-  // Request refund
-  requestRefund: async (paymentId, amount, reason) => {
-    return await apiPost(`/payments/${paymentId}/refund`, { amount, reason });
-  },
-
-  // Build Razorpay options from order
-  buildRazorpayOptions: (razorpayOrder, user, description = 'TechCrate Purchase') => {
-    return {
-      description,
-      image: 'https://your-logo-url.com/logo.png',
-      currency: razorpayOrder.currency || 'INR',
-      key: razorpayOrder.key_id,
-      amount: razorpayOrder.amount,
-      name: 'TechCrate',
-      order_id: razorpayOrder.id,
-      prefill: {
-        email: user.email,
-        contact: user.phone || '',
-        name: user.name,
-      },
-      theme: { color: '#1E3A5F' },
-    };
   },
 };
 

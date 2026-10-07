@@ -25,7 +25,7 @@ export default function Payments() {
     <div className="p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white tracking-tight">Payment Transactions & Gateway Logs</h1>
-        <p className="text-sm text-slate-400">Monitor UPI, Razorpay & Card transactions securely</p>
+        <p className="text-sm text-slate-400">Monitor Auto UPI Gateway (autoupigateway.com) & Instant UPI transactions securely</p>
       </div>
 
       <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
@@ -47,7 +47,7 @@ export default function Payments() {
                 <td className="p-4 font-mono text-slate-300">{p.orderId}</td>
                 <td className="p-4 font-semibold text-white">{p.customerName}</td>
                 <td className="p-4 font-bold text-emerald-400">₹{p.amount}</td>
-                <td className="p-4 text-slate-300">{p.paymentMethod}</td>
+                <td className="p-4 text-slate-300">{p.paymentMethod || 'Auto UPI Gateway'}</td>
                 <td className="p-4">
                   <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 w-max">
                     <CheckCircle2 className="w-3.5 h-3.5" /> {p.status}

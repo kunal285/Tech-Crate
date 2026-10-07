@@ -106,6 +106,7 @@ app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/posters', require('./routes/posterRoutes'));
 app.use('/api/banners', require('./routes/posterRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use('/api/webhooks', require('./routes/paymentRoutes'));
 
 // Interactive Swagger / OpenAPI Documentation
 const swaggerUi = require('swagger-ui-express');
