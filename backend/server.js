@@ -55,7 +55,10 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:5175',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
   'http://localhost:8081',
   'http://localhost:8082',
   'http://10.0.2.2:5000',
@@ -63,14 +66,23 @@ const allowedOrigins = [
   process.env.ADMIN_URL,
 ].filter(Boolean);
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (/^https:\/\/.*\.onrender\.com$/.test(origin)) return true;
+  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+  if (/^https:\/\/.*\.netlify\.app$/.test(origin)) return true;
+  return false;
+};
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow mobile apps / native clients with no origin header or listed origins
-      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      if (isAllowedOrigin(origin) || process.env.NODE_ENV !== 'production') {
         callback(null, true);
       } else {
-        callback(new Error('Blocked by CORS security policy'));
+        callback(null, false);
       }
     },
     credentials: true,

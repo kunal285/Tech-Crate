@@ -23,8 +23,10 @@ export const useAuthStore = create((set, get) => ({
   login: async (email, password, { totpCode, recoveryCode } = {}) => {
     set({ loading: true, error: null });
     try {
+      const identifier = String(email || '').trim();
       const response = await api.post('/auth/login', {
-        email,
+        username: identifier,
+        email: identifier,
         password,
         totpCode,
         recoveryCode,
@@ -65,10 +67,13 @@ export const useAuthStore = create((set, get) => ({
       });
       return true;
     } catch (err) {
-      const errorMsg =
-        err.response?.data?.message || err.message || 'Authentication failed. Please verify credentials.';
+      let errorMsg =
+        err.response?.data?.message || err.message;
+      if (!err.response && (err.code === 'ECONNABORTED' || err.message === 'Network Error')) {
+        errorMsg = 'Backend server is waking up or temporarily unreachable. Please wait 10 seconds and try again.';
+      }
       set({
-        error: errorMsg,
+        error: errorMsg || 'Authentication failed. Please verify credentials.',
         loading: false,
       });
       return false;
