@@ -132,8 +132,14 @@ android {
             minifyEnabled enableProguardInReleaseBuilds
             shrinkResources true
             crunchPngs true
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core:1.15.0'
+        force 'androidx.core:core-ktx:1.15.0'
     }
 }
 
