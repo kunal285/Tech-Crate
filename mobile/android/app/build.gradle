@@ -103,6 +103,19 @@ android {
             keyPassword 'android'
         }
     }
+    packaging {
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/NOTICE',
+                'META-INF/LICENSE',
+                'META-INF/LICENSE.txt',
+                'META-INF/NOTICE.txt',
+                'META-INF/*.version'
+            ]
+        }
+    }
+
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
@@ -113,6 +126,7 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             shrinkResources true
+            crunchPngs true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
