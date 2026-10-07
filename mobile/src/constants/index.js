@@ -1,15 +1,20 @@
 import {Platform} from 'react-native';
 
 // API Configuration
-const envApiUrl =
+const rawApiUrl =
   (typeof process !== 'undefined' && process.env && (process.env.EXPO_PUBLIC_API_URL || process.env.API_BASE_URL)) ||
   null;
 
-export const API_BASE_URL =
-  envApiUrl ||
-  (Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api');
+const normalizeApiUrl = (url) => {
+  if (!url) return null;
+  const trimmed = url.trim().replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+};
 
-export const API_TIMEOUT = 30000;
+export const API_BASE_URL =
+  normalizeApiUrl(rawApiUrl) || 'https://tech-crate.onrender.com/api';
+
+export const API_TIMEOUT = 45000;
 
 // App Constants
 export const APP_NAME = 'Tech Crate';

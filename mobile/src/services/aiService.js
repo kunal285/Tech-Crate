@@ -28,4 +28,5 @@ const aiService = {
   },
 };
 
+export { aiService };
 export default aiService;

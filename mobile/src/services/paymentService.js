@@ -36,4 +36,5 @@ const paymentService = {
   },
 };
 
+export { paymentService };
 export default paymentService;

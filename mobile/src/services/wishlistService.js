@@ -34,4 +34,5 @@ const wishlistService = {
   },
 };
 
+export { wishlistService };
 export default wishlistService;

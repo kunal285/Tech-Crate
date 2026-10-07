@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,11 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ShoppingCart,
   Trash2,
@@ -24,12 +27,14 @@ import {
 import Header from '../../components/common/Header';
 import Button from '../../components/common/Button';
 import SafeImage from '../../components/common/SafeImage';
-import { Colors } from '../../theme';
 import { useCartStore } from '../../store/cartStore';
 
 export default function CartScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const items = useCartStore((state) => state.items || []);
+  const isLoading = useCartStore((state) => state.isLoading);
+  const fetchCart = useCartStore((state) => state.fetchCart);
+  const restoreLocal = useCartStore((state) => state.restoreLocal);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const removeItem = useCartStore((state) => state.removeItem);
   const getTotals = useCartStore((state) => state.getTotals);
@@ -40,6 +45,33 @@ export default function CartScreen({ navigation }) {
 
   const [couponCode, setCouponCode] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+
+  // Re-fetch / restore cart on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      const load = async () => {
+        await restoreLocal();
+        await fetchCart();
+        if (isMounted) setInitialLoaded(true);
+      };
+      load();
+      return () => {
+        isMounted = false;
+      };
+    }, [fetchCart, restoreLocal])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchCart();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const totals = typeof getTotals === 'function' ? getTotals() : {
     subtotal: 0,
@@ -82,11 +114,30 @@ export default function CartScreen({ navigation }) {
     } catch {}
   };
 
+  const handleDeleteItem = (itemId, itemTitle) => {
+    removeItem(itemId);
+  };
+
+  if (!initialLoaded && isLoading && items.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Header title="Shopping Cart" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1E3A5F" />
+          <Text style={styles.loadingText}>Loading your cart...</Text>
+        </View>
+      </View>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <View style={styles.container}>
         <Header title="Shopping Cart" />
-        <View style={styles.emptyContainer}>
+        <ScrollView
+          contentContainerStyle={styles.emptyContainer}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
           <View style={styles.emptyIconBg}>
             <ShoppingCart size={54} color="#94A3B8" />
           </View>
@@ -100,7 +151,7 @@ export default function CartScreen({ navigation }) {
             onPress={() => navigation.navigate('Home', { screen: 'HomeMain' })}
             style={styles.emptyBtn}
           />
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -117,21 +168,42 @@ export default function CartScreen({ navigation }) {
           { paddingBottom: 110 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Cart Item Cards */}
         {items.map((item, idx) => {
-          const itemId = item._id || item.productId || item.id || `item_${idx}`;
-          const itemTitle = item.title || item.name || 'Component';
-          const itemPrice = Number(item.price) || 0;
+          const itemId = item._id || item.productId || item.product?._id || item.id || `item_${idx}`;
+          const itemTitle =
+            item.title ||
+            item.name ||
+            item.product?.title ||
+            item.product?.name ||
+            item.projectKit?.title ||
+            item.projectKit?.name ||
+            'Hardware Component';
+
+          const itemImage =
+            item.image ||
+            item.imageUrl ||
+            (Array.isArray(item.images) && item.images[0]) ||
+            item.product?.images?.[0] ||
+            item.product?.image ||
+            item.product?.imageUrl ||
+            item.projectKit?.images?.[0] ||
+            item.projectKit?.image ||
+            null;
+
+          const itemPrice = Number(item.price ?? item.product?.discountPrice ?? item.product?.price ?? 0);
+          const itemQty = Math.max(1, Number(item.quantity) || 1);
 
           return (
             <View key={itemId} style={styles.cartCard}>
               <SafeImage
-                source={item.images?.[0] || item.images || item.image || item.imageUrl}
+                source={itemImage}
                 style={styles.itemImage}
                 resizeMode="contain"
                 placeholderIcon={Package}
-                placeholderText="Item"
+                placeholderText="Tech Crate"
               />
 
               <View style={styles.itemDetails}>
@@ -140,7 +212,7 @@ export default function CartScreen({ navigation }) {
                     {itemTitle}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => removeItem(itemId)}
+                    onPress={() => handleDeleteItem(itemId, itemTitle)}
                     style={styles.removeBtn}
                     accessibilityLabel="Remove item"
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -151,32 +223,31 @@ export default function CartScreen({ navigation }) {
 
                 <View style={styles.itemPriceAndQtyRow}>
                   <Text style={styles.itemPrice}>
-                    ₹{(itemPrice * (item.quantity || 1)).toLocaleString('en-IN')}
-                    {item.quantity > 1 && (
+                    ₹{(itemPrice * itemQty).toLocaleString('en-IN')}
+                    {itemQty > 1 && (
                       <Text style={styles.singleItemPrice}>
-                        {' '}(₹{itemPrice} ea)
+                        {' '}(₹{itemPrice.toLocaleString('en-IN')} ea)
                       </Text>
                     )}
                   </Text>
 
                   <View style={styles.qtyControls}>
                     <TouchableOpacity
-                      onPress={() => updateQuantity(itemId, Math.max(1, (item.quantity || 1) - 1))}
+                      onPress={() => updateQuantity(itemId, itemQty - 1)}
                       style={styles.qtyBtn}
                       activeOpacity={0.7}
-                      disabled={item.quantity <= 1}
                       accessibilityLabel="Decrease quantity"
                     >
                       <Minus
                         size={13}
-                        color={item.quantity <= 1 ? '#CBD5E1' : '#0F172A'}
+                        color={itemQty <= 1 ? '#EF4444' : '#0F172A'}
                       />
                     </TouchableOpacity>
 
-                    <Text style={styles.qtyVal}>{item.quantity || 1}</Text>
+                    <Text style={styles.qtyVal}>{itemQty}</Text>
 
                     <TouchableOpacity
-                      onPress={() => updateQuantity(itemId, (item.quantity || 1) + 1)}
+                      onPress={() => updateQuantity(itemId, itemQty + 1)}
                       style={styles.qtyBtn}
                       activeOpacity={0.7}
                       accessibilityLabel="Increase quantity"
@@ -324,6 +395,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -396,7 +479,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   removeBtn: {
-    padding: 2,
+    padding: 4,
   },
   itemPriceAndQtyRow: {
     flexDirection: 'row',

@@ -13,17 +13,17 @@ const cartService = {
 
   // Update item quantity
   updateQuantity: async (cartItemId, quantity) => {
-    return await apiPut(`/cart/item/${cartItemId}`, {quantity});
+    return await apiPut(`/cart/items/${cartItemId}`, {quantity});
   },
 
   // Remove item from cart
   removeItem: async cartItemId => {
-    return await apiDelete(`/cart/item/${cartItemId}`);
+    return await apiDelete(`/cart/items/${cartItemId}`);
   },
 
   // Clear cart
   clearCart: async () => {
-    return await apiDelete('/cart/clear');
+    return await apiDelete('/cart');
   },
 
   // Save item for later
@@ -58,4 +58,5 @@ const cartService = {
   },
 };
 
+export { cartService };
 export default cartService;

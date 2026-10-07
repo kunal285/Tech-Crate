@@ -1,13 +1,21 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const rawUrl = import.meta.env.VITE_API_BASE_URL || 'https://tech-crate.onrender.com/api';
+
+const normalizeApiUrl = (url) => {
+  if (!url) return 'https://tech-crate.onrender.com/api';
+  const trimmed = url.trim().replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+};
+
+const API_BASE_URL = normalizeApiUrl(rawUrl);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 20000,
+  timeout: 30000,
 });
 
 // Request Interceptor: Attach Admin Token

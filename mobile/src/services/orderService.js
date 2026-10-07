@@ -61,4 +61,5 @@ const orderService = {
   },
 };
 
+export { orderService };
 export default orderService;

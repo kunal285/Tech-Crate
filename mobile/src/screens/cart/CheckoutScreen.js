@@ -19,6 +19,7 @@ import {
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
 import { Colors } from '../../theme';
+import { API_BASE_URL } from '../../constants';
 import { useCartStore } from '../../store/cartStore';
 import { orderService } from '../../services/orderService';
 import paymentService from '../../services/paymentService';
@@ -133,7 +134,7 @@ export default function CheckoutScreen({ route, navigation }) {
         currency: 'INR',
         order_id: String(targetOrderId),
         redirect_url: 'TechCrate://payment/success',
-        webhook_url: 'http://localhost:5000/api/webhooks/payment',
+        webhook_url: `${API_BASE_URL}/webhooks/payment`,
       });
 
       const paymentUrl = paymentIntentRes?.payment_url;
