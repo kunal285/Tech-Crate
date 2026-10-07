@@ -1,15 +1,6 @@
-const { Sentry } = require('../config/sentry');
-
 const errorHandler = (err, req, res, next) => {
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   let message = err.message || 'Internal Server Error';
-
-  // Report 500 internal server exceptions to Sentry
-  if (statusCode >= 500 && process.env.SENTRY_DSN) {
-    try {
-      Sentry.captureException(err);
-    } catch (_) {}
-  }
 
   // Handle Mongoose Bad ObjectId (CastError)
   if (err.name === 'CastError') {

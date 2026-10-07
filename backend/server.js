@@ -15,9 +15,6 @@ validateEnv();
 
 const app = express();
 
-const { initSentry } = require('./config/sentry');
-initSentry(app);
-
 // Trust reverse proxy for rate limiting if behind Nginx/Cloudflare
 app.set('trust proxy', 1);
 
