@@ -10,6 +10,7 @@
     "ios": "npx react-native run-ios",
     "lint": "eslint .",
     "start": "npx react-native start",
+    "start:reset": "npx react-native start --reset-cache",
     "start:8082": "npx react-native start --port 8082",
     "test": "jest"
   },
