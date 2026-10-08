@@ -4,27 +4,33 @@ const {
   createPaymentOrder,
   getPaymentStatus,
   handlePaymentWebhook,
+  reconcilePaymentManual,
   getPaymentHistory,
 } = require('../controllers/paymentController');
-const { protect, optionalProtect } = require('../middleware/authMiddleware');
+const { protect, optionalProtect, authorizeRoles } = require('../middleware/authMiddleware');
 const { checkoutLimiter } = require('../middleware/rateLimiter');
 
-// Webhook endpoints (accessible by Gateway & External Webhook Senders)
+// 1. Webhook endpoints (Cryptographically verified via HMAC signature)
 router.post('/webhook', handlePaymentWebhook);
 router.post('/webhooks/payment', handlePaymentWebhook);
+router.post('/payment', handlePaymentWebhook);
+router.post('/', handlePaymentWebhook);
 router.post('/autoupi/webhook', handlePaymentWebhook);
 
-// Order Creation endpoints
-router.post('/orders/create', optionalProtect, checkoutLimiter, createPaymentOrder);
-router.post('/create-order', optionalProtect, checkoutLimiter, createPaymentOrder);
-router.post('/autoupi/create-order', optionalProtect, checkoutLimiter, createPaymentOrder);
+// 2. Order Payment Initiation endpoints (Strictly protected by authentication & rate limiting)
+router.post('/orders/create', protect, checkoutLimiter, createPaymentOrder);
+router.post('/create-order', protect, checkoutLimiter, createPaymentOrder);
+router.post('/autoupi/create-order', protect, checkoutLimiter, createPaymentOrder);
 
-// Status Verification endpoints (Server-side Source of Truth)
-router.get('/:order_id/status', optionalProtect, getPaymentStatus);
-router.get('/status/:order_id', optionalProtect, getPaymentStatus);
-router.post('/verify', optionalProtect, getPaymentStatus);
+// 3. Status Verification endpoints (Server-Authoritative Source of Truth)
+router.get('/:order_id/status', protect, getPaymentStatus);
+router.get('/status/:order_id', protect, getPaymentStatus);
+router.post('/verify', protect, getPaymentStatus);
 
-// Payment History
+// 4. Admin Privileged Manual Reconciliation (Requires Admin Role & Audit Logging)
+router.post('/reconcile', protect, authorizeRoles('admin'), reconcilePaymentManual);
+
+// 5. Payment History
 router.get('/history', protect, getPaymentHistory);
 
 module.exports = router;

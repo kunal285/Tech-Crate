@@ -1,28 +1,80 @@
-import React, { useState, useEffect } from 'react';
-import { View, Image, StyleSheet, ActivityIndicator, Text } from 'react-native';
-import { Cpu } from 'lucide-react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Image, StyleSheet, Animated, Text, Platform } from 'react-native';
+import { Cpu, Image as ImageIcon } from 'lucide-react-native';
 import { Colors } from '../../theme';
 import { getImageUrl } from '../../utils/imageUtils';
 
-const SafeImage = ({
+/**
+ * LazyImage / SafeImage - Unified lazy loading image component with
+ * skeleton shimmer pulse, smooth progressive fade-in, and error fallback.
+ */
+const LazyImage = ({
   source,
   style,
   resizeMode = 'cover',
   placeholderIcon: PlaceholderIcon = Cpu,
   placeholderText = 'Tech Crate',
   containerStyle,
+  fadeDuration = 280,
+  showSkeleton = true,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const resolvedUri = getImageUrl(source);
 
+  // Animation values for fade-in and pulsing skeleton
+  const imageOpacity = useRef(new Animated.Value(0)).current;
+  const skeletonOpacity = useRef(new Animated.Value(0.35)).current;
+
+  // Resolve source (supports string URL, { uri: ... }, or local require(...) assets)
+  let resolvedUri = null;
+  let isLocalAsset = false;
+
+  if (typeof source === 'number') {
+    isLocalAsset = true;
+  } else {
+    resolvedUri = getImageUrl(source);
+  }
+
+  // Reset state when source changes
   useEffect(() => {
     setLoading(true);
     setError(false);
-  }, [resolvedUri]);
+    imageOpacity.setValue(0);
+  }, [resolvedUri, source]);
 
-  const handleLoadEnd = () => {
+  // Pulsing skeleton animation loop while loading
+  useEffect(() => {
+    let animationLoop;
+    if (loading && showSkeleton) {
+      animationLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(skeletonOpacity, {
+            toValue: 0.85,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(skeletonOpacity, {
+            toValue: 0.35,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animationLoop.start();
+    }
+    return () => {
+      if (animationLoop) animationLoop.stop();
+    };
+  }, [loading, showSkeleton]);
+
+  const handleLoadSuccess = () => {
     setLoading(false);
+    setError(false);
+    Animated.timing(imageOpacity, {
+      toValue: 1,
+      duration: fadeDuration,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleError = () => {
@@ -30,7 +82,8 @@ const SafeImage = ({
     setError(true);
   };
 
-  if (!resolvedUri || error) {
+  // Fallback view on error or missing image
+  if ((!isLocalAsset && !resolvedUri) || error) {
     return (
       <View style={[styles.placeholderContainer, style, containerStyle]}>
         {typeof PlaceholderIcon === 'function' || typeof PlaceholderIcon === 'object' ? (
@@ -45,20 +98,41 @@ const SafeImage = ({
     );
   }
 
+  // Build image source object with caching policy for remote URIs
+  const imageSource = isLocalAsset
+    ? source
+    : {
+        uri: resolvedUri,
+        cache: 'force-cache',
+      };
+
   return (
     <View style={[styles.imageWrapper, style, containerStyle]}>
-      <Image
-        source={{ uri: resolvedUri }}
-        style={[styles.image, style]}
+      {/* Animated Pulsing Skeleton Layer */}
+      {loading && showSkeleton && (
+        <Animated.View
+          style={[
+            styles.skeletonLayer,
+            StyleSheet.absoluteFillObject,
+            { opacity: skeletonOpacity },
+          ]}
+        />
+      )}
+
+      {/* Progressive Fade-in Image */}
+      <Animated.Image
+        source={imageSource}
+        style={[
+          styles.image,
+          style,
+          {
+            opacity: imageOpacity,
+          },
+        ]}
         resizeMode={resizeMode}
-        onLoadEnd={handleLoadEnd}
+        onLoad={handleLoadSuccess}
         onError={handleError}
       />
-      {loading && (
-        <View style={[styles.loadingOverlay, StyleSheet.absoluteFillObject]}>
-          <ActivityIndicator size="small" color={Colors.primary} />
-        </View>
-      )}
     </View>
   );
 };
@@ -67,19 +141,19 @@ const styles = StyleSheet.create({
   imageWrapper: {
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: Colors.surfaceElevated || '#F1F5F9',
+    backgroundColor: Colors.backgroundSecondary || '#F1F5F9',
   },
   image: {
     width: '100%',
     height: '100%',
   },
-  loadingOverlay: {
-    backgroundColor: 'rgba(241, 245, 249, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  skeletonLayer: {
+    backgroundColor: '#CBD5E1',
+    width: '100%',
+    height: '100%',
   },
   placeholderContainer: {
-    backgroundColor: Colors.surfaceElevated || '#F1F5F9',
+    backgroundColor: Colors.backgroundSecondary || '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
@@ -100,4 +174,6 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SafeImage;
+export const SafeImage = LazyImage;
+export { LazyImage };
+export default LazyImage;

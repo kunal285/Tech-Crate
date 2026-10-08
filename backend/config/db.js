@@ -1,4 +1,12 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// Ensure MongoDB Atlas SRV records resolve reliably on Windows / custom DNS setups
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (dnsErr) {
+  // Ignore in restricted environments
+}
 const User = require('../models/User');
 const Product = require('../models/Product');
 const ProjectKit = require('../models/ProjectKit');

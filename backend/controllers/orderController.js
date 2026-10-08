@@ -136,27 +136,29 @@ const createOrder = async (req, res) => {
       taxPrice,
       shippingPrice,
       totalPrice,
-      isPaid: paymentMethod === 'COD' ? false : true, // Simulated live payment for in-app flow, COD pending
-      paidAt: paymentMethod === 'COD' ? null : new Date(),
-      orderStatus: 'Processing',
+      isPaid: false, // Must be verified by backend before transitioning to true
+      paidAt: null,
+      orderStatus: paymentMethod === 'COD' ? 'Processing' : 'Pending',
     });
 
     const createdOrder = await order.save();
 
-    // 5. Clear user's cart on successful checkout
+    // 5. Clear user's cart on checkout initiation
     await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
 
     res.status(201).json({
       success: true,
-      message: 'Order created successfully',
+      message: 'Order created successfully. Awaiting payment.',
       order: createdOrder,
       discountApplied: discountAmount,
       coupon: appliedCoupon,
     });
 
-    // Asynchronously dispatch background side-effects (Email, Push, Invoice) without blocking response
-    const queueService = require('../services/queueService');
-    queueService.dispatchOrderProcessing(createdOrder, req.user);
+    // If COD, dispatch order processing immediately. For online UPI, dispatch only upon verified payment
+    if (paymentMethod === 'COD') {
+      const queueService = require('../services/queueService');
+      queueService.dispatchOrderProcessing(createdOrder, req.user);
+    }
   } catch (error) {
     // Rollback deducted inventory if order creation fails midway
     for (const item of deductedItems) {

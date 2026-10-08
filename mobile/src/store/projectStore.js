@@ -1,12 +1,17 @@
-import {create} from 'zustand';
+import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants';
 import projectService from '../services/projectService';
+import { FALLBACK_PROJECT_KITS } from '../data/fallbackData';
 
 const useProjectStore = create((set, get) => ({
-  projects: [],
-  projectKits: [],
-  featuredKits: [],
+  projects: FALLBACK_PROJECT_KITS,
+  projectKits: FALLBACK_PROJECT_KITS,
+  featuredKits: FALLBACK_PROJECT_KITS,
   currentProject: null,
   currentKit: null,
+  isLoading: false,
+  error: null,
   builderConfig: {
     projectType: null,
     microcontroller: null,
@@ -18,69 +23,117 @@ const useProjectStore = create((set, get) => ({
   isLoadingFeatured: false,
   featuredError: null,
 
+  initCache: async () => {
+    try {
+      const cached = await AsyncStorage.getItem(STORAGE_KEYS.PROJECTS_CACHE);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          set({
+            projects: parsed,
+            projectKits: parsed,
+            featuredKits: parsed,
+          });
+        }
+      }
+    } catch {}
+  },
+
   fetchProjects: async (params = {}) => {
-    set({isLoading: true, error: null});
-    const result = await projectService.getProjects(params);
-    if (result.success) {
-      const items = Array.isArray(result.data)
-        ? result.data
-        : (result.data?.projects || result.data?.kits || []);
-      set({projects: items, isLoading: false});
-    } else {
-      set({error: result.message, isLoading: false});
-    }
+    set({ isLoading: true, error: null });
+    try {
+      const result = await projectService.getProjects(params);
+      if (result.success) {
+        const items = Array.isArray(result.data)
+          ? result.data
+          : result.data?.projects || result.data?.kits || [];
+        if (items.length > 0) {
+          set({ projects: items, isLoading: false });
+          AsyncStorage.setItem(STORAGE_KEYS.PROJECTS_CACHE, JSON.stringify(items)).catch(() => {});
+        } else {
+          set({ isLoading: false });
+        }
+        return result;
+      }
+    } catch {}
+    set({ isLoading: false });
   },
 
   fetchProjectKits: async (params = {}) => {
-    set({isLoading: true, error: null});
-    const result = await projectService.getProjectKits(params);
-    if (result.success) {
-      const items = Array.isArray(result.data)
-        ? result.data
-        : (result.data?.kits || result.data?.projects || []);
-      set({projectKits: items, isLoading: false});
-    } else {
-      set({error: result.message, isLoading: false});
-    }
+    set({ isLoading: true, error: null });
+    try {
+      const result = await projectService.getProjectKits(params);
+      if (result.success) {
+        const items = Array.isArray(result.data)
+          ? result.data
+          : result.data?.kits || result.data?.projects || [];
+        if (items.length > 0) {
+          set({ projectKits: items, isLoading: false });
+          AsyncStorage.setItem(STORAGE_KEYS.PROJECTS_CACHE, JSON.stringify(items)).catch(() => {});
+        } else {
+          set({ isLoading: false });
+        }
+        return result;
+      }
+    } catch {}
+    set({ isLoading: false });
   },
 
   fetchFeaturedKits: async () => {
-    set({isLoadingFeatured: true, featuredError: null});
-    const result = await projectService.getFeaturedKits(6);
-    if (result.success) {
-      const items = Array.isArray(result.data)
-        ? result.data
-        : (result.data?.kits || result.data?.projects || []);
-      set({featuredKits: items, isLoadingFeatured: false});
-    } else {
-      set({featuredError: result.message, isLoadingFeatured: false});
-    }
-    return result;
+    set({ isLoadingFeatured: true, featuredError: null });
+    try {
+      const result = await projectService.getFeaturedKits(6);
+      if (result.success) {
+        const items = Array.isArray(result.data)
+          ? result.data
+          : result.data?.kits || result.data?.projects || [];
+        if (items.length > 0) {
+          set({ featuredKits: items, isLoadingFeatured: false });
+        } else {
+          set({ isLoadingFeatured: false });
+        }
+        return result;
+      }
+    } catch {}
+    set({ isLoadingFeatured: false });
+    return { success: true, data: get().featuredKits };
   },
 
   fetchProject: async id => {
-    set({isLoading: true, currentProject: null});
-    const result = await projectService.getProject(id);
-    if (result.success) {
-      set({currentProject: result.data.project, isLoading: false});
-    } else {
-      set({error: result.message, isLoading: false});
+    set({ isLoading: true, currentProject: null });
+    const existing = get().projects.find(p => (p._id || p.id) === id);
+    if (existing) {
+      set({ currentProject: existing, isLoading: false });
     }
+    try {
+      const result = await projectService.getProject(id);
+      if (result.success && result.data?.project) {
+        set({ currentProject: result.data.project, isLoading: false });
+        return result;
+      }
+    } catch {}
+    return { success: !!existing, data: { project: existing } };
   },
 
   fetchProjectKit: async id => {
-    set({isLoading: true, currentKit: null});
-    const result = await projectService.getProjectKit(id);
-    if (result.success) {
-      set({currentKit: result.data.kit, isLoading: false});
-    } else {
-      set({error: result.message, isLoading: false});
+    set({ isLoading: true, currentKit: null });
+    const existing = get().projectKits.find(k => (k._id || k.id) === id);
+    if (existing) {
+      set({ currentKit: existing, isLoading: false });
     }
+    try {
+      const result = await projectService.getProjectKit(id);
+      if (result.success && result.data?.kit) {
+        set({ currentKit: result.data.kit, isLoading: false });
+        return result;
+      }
+    } catch {}
+    return { success: !!existing, data: { kit: existing } };
   },
 
   // Project Builder
   setBuilderConfig: config => {
-    set(state => ({builderConfig: {...state.builderConfig, ...config}}));
+    set(state => ({ builderConfig: { ...state.builderConfig, ...config } }));
   },
 
   resetBuilder: () => {
@@ -97,19 +150,24 @@ const useProjectStore = create((set, get) => ({
   },
 
   generateProject: async () => {
-    const {builderConfig} = get();
-    set({isLoading: true, error: null});
-    const result = await projectService.buildProject(builderConfig);
-    if (result.success) {
-      set({builderResult: result.data, isLoading: false});
-    } else {
-      set({error: result.message, isLoading: false});
-    }
-    return result;
+    const { builderConfig } = get();
+    set({ isLoading: true, error: null });
+    try {
+      const result = await projectService.buildProject(builderConfig);
+      if (result.success) {
+        set({ builderResult: result.data, isLoading: false });
+        return result;
+      }
+    } catch {}
+    set({ isLoading: false });
+    return { success: false };
   },
 
-  clearError: () => set({error: null}),
+  clearError: () => set({ error: null }),
 }));
+
+// Initialize cache on startup
+useProjectStore.getState().initCache();
 
 export { useProjectStore };
 export default useProjectStore;

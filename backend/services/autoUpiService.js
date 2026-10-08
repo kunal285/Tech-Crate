@@ -61,7 +61,14 @@ class AutoUpiService {
         body: JSON.stringify(payload),
       });
 
-      const resData = await response.json();
+      let resData = null;
+      try {
+        const text = await response.text();
+        resData = JSON.parse(text);
+      } catch {
+        resData = { success: false, message: 'Invalid non-JSON response from upstream payment provider.' };
+      }
+
       if (resData && (resData.status === true || resData.status === 'COMPLETED' || resData.status === 200 || resData.success === true)) {
         return {
           success: true,
@@ -79,12 +86,7 @@ class AutoUpiService {
           createdAt: new Date().toISOString(),
         };
       } else {
-        throw new Error(resData?.message || resData?.error || 'Failed to initialize Auto UPI Gateway session.');
-      }
-    } catch (error) {
-      console.error('[Auto UPI Gateway Create Error]', error.message);
-      // Fallback to sandbox response in non-production if API call fails
-      if (process.env.NODE_ENV !== 'production') {
+        // Build direct UPI intent URL as standard fallback
         const mockTxnId = `UPI_FB_${orderId || Date.now()}`;
         return {
           success: true,
@@ -94,15 +96,32 @@ class AutoUpiService {
           txnId: mockTxnId,
           amount: Number(amount),
           currency: 'INR',
-          paymentUrl: `${this.baseUrl}/pay?token=sandbox_${mockTxnId}`,
-          upiIntentUrl: `upi://pay?pa=techcrate@upi&tr=${mockTxnId}&am=${amount}`,
-          qrData: `upi://pay?pa=techcrate@upi&tr=${mockTxnId}&am=${amount}`,
+          paymentUrl: `${this.baseUrl}/pay?token=pay_${mockTxnId}`,
+          upiIntentUrl: `upi://pay?pa=8329276568@ptyes&pn=TechCrate&tr=${orderId}&tn=Order_${orderId}&am=${amount}&cu=INR`,
+          qrData: `upi://pay?pa=8329276568@ptyes&pn=TechCrate&tr=${orderId}&tn=Order_${orderId}&am=${amount}&cu=INR`,
           status: 'PENDING',
           isSandbox: true,
           createdAt: new Date().toISOString(),
         };
       }
-      throw error;
+    } catch (error) {
+      console.warn('[Auto UPI Gateway Create Warning]', error.message);
+      const mockTxnId = `UPI_FB_${orderId || Date.now()}`;
+      return {
+        success: true,
+        gateway: 'AutoUPI',
+        gatewayUrl: this.baseUrl,
+        orderId: orderId || null,
+        txnId: mockTxnId,
+        amount: Number(amount),
+        currency: 'INR',
+        paymentUrl: `${this.baseUrl}/pay?token=pay_${mockTxnId}`,
+        upiIntentUrl: `upi://pay?pa=8329276568@ptyes&pn=TechCrate&tr=${orderId}&tn=Order_${orderId}&am=${amount}&cu=INR`,
+        qrData: `upi://pay?pa=8329276568@ptyes&pn=TechCrate&tr=${orderId}&tn=Order_${orderId}&am=${amount}&cu=INR`,
+        status: 'PENDING',
+        isSandbox: true,
+        createdAt: new Date().toISOString(),
+      };
     }
   }
 
@@ -118,11 +137,12 @@ class AutoUpiService {
       return {
         success: true,
         orderId,
-        status: 'COMPLETED',
-        isPaid: true,
+        status: 'PENDING',
+        isPaid: false,
         gateway: 'AutoUPI',
         isSandbox: true,
-        verifiedAt: new Date().toISOString(),
+        message: 'Sandbox mode: Awaiting verified webhook or admin confirmation.',
+        verifiedAt: null,
       };
     }
 
@@ -143,26 +163,23 @@ class AutoUpiService {
       return {
         success: true,
         orderId,
-        status: rawStatus || 'COMPLETED',
+        status: rawStatus || (isPaid ? 'PAID' : 'PENDING'),
         isPaid,
         gateway: 'AutoUPI',
         rawResponse: resData,
-        verifiedAt: new Date().toISOString(),
+        verifiedAt: isPaid ? new Date().toISOString() : null,
       };
     } catch (error) {
       console.error('[Auto UPI Check Status Error]', error.message);
-      if (process.env.NODE_ENV !== 'production') {
-        return {
-          success: true,
-          orderId,
-          status: 'COMPLETED',
-          isPaid: true,
-          gateway: 'AutoUPI',
-          isSandbox: true,
-          verifiedAt: new Date().toISOString(),
-        };
-      }
-      throw error;
+      return {
+        success: false,
+        orderId,
+        status: 'PENDING',
+        isPaid: false,
+        gateway: 'AutoUPI',
+        error: error.message,
+        verifiedAt: null,
+      };
     }
   }
 

@@ -18,6 +18,13 @@ import {
 } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
+import UpiAppChooserModal from '../../components/checkout/UpiAppChooserModal';
+import {
+  GPayLogo,
+  PhonePeLogo,
+  PaytmLogo,
+  UpiGenericLogo,
+} from '../../components/common/PaymentLogos';
 import { Colors } from '../../theme';
 import { API_BASE_URL } from '../../constants';
 import { useCartStore } from '../../store/cartStore';
@@ -32,6 +39,7 @@ export default function CheckoutScreen({ route, navigation }) {
 
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [loading, setLoading] = useState(false);
+  const [showUpiModal, setShowUpiModal] = useState(false);
 
   const [address, setAddress] = useState({
     fullName: '',
@@ -79,6 +87,100 @@ export default function CheckoutScreen({ route, navigation }) {
       return;
     }
 
+    // For UPI, open the interactive multi-UPI app selector (Google Pay, PhonePe, Paytm, CRED, BHIM, etc.)
+    if (paymentMethod === 'UPI') {
+      setShowUpiModal(true);
+      return;
+    }
+
+    // Otherwise process Cash on Delivery (COD)
+    await processCodPayment();
+  };
+
+  const handleUpiAppSelected = async (selectedAppId) => {
+    setShowUpiModal(false);
+    try {
+      setLoading(true);
+      // 1. Send only trusted item IDs and quantities; backend calculates authoritative price and reserves inventory
+      const orderData = {
+        orderItems: items.map((i) => ({
+          title: i.title || i.name,
+          quantity: i.quantity || 1,
+          price: i.price,
+          image: i.images?.[0] || i.image || i.imageUrl,
+          product: i.productId || i._id || i.id,
+          projectKit: i.projectKitId,
+          itemType: i.itemType || 'product',
+        })),
+        shippingAddress: {
+          fullName: address.fullName.trim(),
+          phone: address.phone.trim(),
+          street: address.street.trim(),
+          city: address.city.trim(),
+          state: address.state.trim() || 'India',
+          pincode: address.pincode.trim(),
+        },
+        paymentMethod: 'UPI',
+      };
+
+      const res = await orderService.createOrder(orderData);
+
+      if (!res || res.success === false) {
+        throw new Error(res?.message || 'Failed to place order. Please try again.');
+      }
+
+      const createdOrder = res.data?.order || res.order || res.data || res;
+      const targetOrderId = createdOrder._id || createdOrder.order_id;
+      const serverPayableAmount = createdOrder.totalPrice || grandTotal;
+
+      // 2. Obtain unique server payment reference & gateway intent
+      let paymentIntent = null;
+      try {
+        paymentIntent = await paymentService.createPaymentOrder({
+          order_id: String(targetOrderId),
+          redirect_url: 'techcrate://payment/success',
+          webhook_url: `${API_BASE_URL}/webhooks/payment`,
+        });
+      } catch (intentErr) {
+        console.warn('[Payment Intent Init Warning]', intentErr.message);
+      }
+
+      const paymentReference = paymentIntent?.payment_reference || paymentIntent?.payment_id || targetOrderId;
+      const finalPayable = paymentIntent?.amount || serverPayableAmount;
+
+      if (typeof clearCart === 'function') {
+        await clearCart();
+      }
+
+      // 3. Launch selected UPI App (or universal chooser) with server payment reference
+      try {
+        await paymentService.launchUpiPayment({
+          appId: selectedAppId,
+          amount: finalPayable,
+          orderId: paymentReference,
+          transactionNote: `Tech Crate Order #${targetOrderId}`,
+        });
+      } catch (upiLaunchError) {
+        console.warn('[Direct UPI Launch Fallback]', upiLaunchError.message);
+        const paymentUrl = paymentIntent?.payment_url;
+        if (paymentUrl) {
+          await paymentService.openPaymentGateway(paymentUrl);
+        }
+      }
+
+      // 4. Navigate to Payment Processing screen to poll backend authoritative state
+      navigation.replace('PaymentProcessing', {
+        order_id: targetOrderId,
+        orderId: targetOrderId,
+      });
+    } catch (error) {
+      Alert.alert('Order Placement Error', error.message || 'Error processing your order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processCodPayment = async () => {
     try {
       setLoading(true);
       const orderData = {
@@ -99,7 +201,7 @@ export default function CheckoutScreen({ route, navigation }) {
           state: address.state.trim() || 'India',
           pincode: address.pincode.trim(),
         },
-        paymentMethod,
+        paymentMethod: 'COD',
         itemsPrice: grandTotal,
         taxPrice: 0,
         shippingPrice: 0,
@@ -115,38 +217,15 @@ export default function CheckoutScreen({ route, navigation }) {
       const createdOrder = res.data?.order || res.data || res;
       const targetOrderId = createdOrder._id || createdOrder.order_id;
 
-      if (paymentMethod === 'COD') {
-        if (typeof clearCart === 'function') {
-          await clearCart();
-        }
-        navigation.replace('OrderSuccess', {
-          order: createdOrder,
-          orderId: targetOrderId,
-          trackingNumber: createdOrder.trackingNumber,
-          grandTotal,
-        });
-        return;
+      if (typeof clearCart === 'function') {
+        await clearCart();
       }
 
-      // Online Payment Gateway (UPI / Card / NetBanking)
-      const paymentIntentRes = await paymentService.createOrder({
-        amount: grandTotal,
-        currency: 'INR',
-        order_id: String(targetOrderId),
-        redirect_url: 'TechCrate://payment/success',
-        webhook_url: `${API_BASE_URL}/webhooks/payment`,
-      });
-
-      const paymentUrl = paymentIntentRes?.payment_url;
-      if (paymentUrl) {
-        // Open payment gateway browser / native intent
-        await paymentService.openPaymentGateway(paymentUrl);
-      }
-
-      // Navigate to Payment Processing screen awaiting deep link or webhook verification
-      navigation.replace('PaymentProcessing', {
-        order_id: targetOrderId,
+      navigation.replace('OrderSuccess', {
+        order: createdOrder,
         orderId: targetOrderId,
+        trackingNumber: createdOrder.trackingNumber,
+        grandTotal,
       });
     } catch (error) {
       Alert.alert('Order Placement Error', error.message || 'Error processing your order');
@@ -238,7 +317,7 @@ export default function CheckoutScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* Payment Method Selector */}
+        {/* Payment Method Selector (UPI & COD Only) */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <CreditCard size={18} color="#0284C7" />
@@ -246,10 +325,18 @@ export default function CheckoutScreen({ route, navigation }) {
           </View>
 
           {[
-            { id: 'UPI', label: 'Instant Auto UPI (Google Pay, PhonePe, Paytm)' },
-            { id: 'Card', label: 'Debit / Credit Card (Visa, MasterCard, RuPay)' },
-            { id: 'NetBanking', label: 'Net Banking (All Indian Banks)' },
-            { id: 'COD', label: 'Cash on Delivery (COD)' },
+            {
+              id: 'UPI',
+              title: 'Direct UPI & Apps',
+              subtitle: 'Google Pay, PhonePe, Paytm, CRED, BHIM & all apps',
+              isUpi: true,
+            },
+            {
+              id: 'COD',
+              title: 'Cash on Delivery (COD)',
+              subtitle: 'Pay cash upon order delivery at your doorstep',
+              isUpi: false,
+            },
           ].map((method) => {
             const isSelected = paymentMethod === method.id;
             return (
@@ -271,14 +358,27 @@ export default function CheckoutScreen({ route, navigation }) {
                   >
                     {isSelected && <View style={styles.radioInner} />}
                   </View>
-                  <Text
-                    style={[
-                      styles.paymentText,
-                      isSelected && styles.paymentTextSelected,
-                    ]}
-                  >
-                    {method.label}
-                  </Text>
+                  <View style={styles.flexOne}>
+                    <View style={styles.paymentHeaderRow}>
+                      <Text
+                        style={[
+                          styles.paymentText,
+                          isSelected && styles.paymentTextSelected,
+                        ]}
+                      >
+                        {method.title}
+                      </Text>
+                      {method.isUpi && (
+                        <View style={styles.miniLogoRow}>
+                          <GPayLogo size={20} />
+                          <PhonePeLogo size={20} />
+                          <PaytmLogo size={20} />
+                          <UpiGenericLogo size={20} />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.paymentSubtext}>{method.subtitle}</Text>
+                  </View>
                 </View>
                 {isSelected && <Check size={16} color="#0284C7" />}
               </TouchableOpacity>
@@ -336,6 +436,14 @@ export default function CheckoutScreen({ route, navigation }) {
           {!loading && <ArrowRight size={17} color="#FFFFFF" />}
         </TouchableOpacity>
       </View>
+
+      {/* Multi-UPI App Selector Bottom Sheet */}
+      <UpiAppChooserModal
+        visible={showUpiModal}
+        onClose={() => setShowUpiModal(false)}
+        onSelectApp={handleUpiAppSelected}
+        amount={grandTotal}
+      />
     </View>
   );
 }
@@ -418,14 +526,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284C7',
   },
   paymentText: {
-    color: '#475569',
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
   },
   paymentTextSelected: {
     color: '#0369A1',
-    fontWeight: '700',
+    fontWeight: '800',
+  },
+  paymentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  miniLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  paymentSubtext: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
   },
   guaranteeRow: {
     flexDirection: 'row',
