@@ -6,7 +6,7 @@ const Cart = require('../models/Cart');
 const Payment = require('../models/Payment');
 const WebhookEvent = require('../models/WebhookEvent');
 const AuditLog = require('../models/AuditLog');
-const autoUpiService = require('../services/autoUpiService');
+const razorpayService = require('../services/razorpayService');
 const queueService = require('../services/queueService');
 
 /**
@@ -376,30 +376,27 @@ const getPaymentStatus = async (req, res) => {
           : 'pending');
     let status = String(rawStatus).toLowerCase();
 
-    // Re-verify with external gateway if not marked as paid yet
-    const activeGatewayKey = autoUpiService.apiKey || autoUpiService.userToken;
-    if (!isPaid && activeGatewayKey && activeGatewayKey !== 'your_auto_upi_user_token_here') {
-      const gatewayQueryId = payment?.gateway_response?.autoUpi?.gatewayOrderId || order_id;
-      const autoUpiVerification = await autoUpiService.checkOrderStatus(gatewayQueryId);
-      if (autoUpiVerification.isPaid) {
-        try {
+    // Re-verify with Razorpay if a payment_id exists and order is still unpaid
+    if (!isPaid && payment?.payment_id && razorpayService.isLive) {
+      try {
+        const rzpPayment = await razorpayService.fetchPayment(payment.payment_id);
+        if (rzpPayment && rzpPayment.status === 'captured') {
           const { updatedOrder } = await finalizePaidOrder(order, {
-            payment_id: payment?.payment_id || `PAY_${order_id}`,
-            txnId: autoUpiVerification.gatewayOrderId || order_id,
-            amount: order?.totalPrice || payment?.amount || 0,
-            currency: order?.currency || payment?.currency || 'INR',
-            verificationSource: 'gateway_api',
-            payload: autoUpiVerification.rawResponse || {},
+            payment_id: rzpPayment.id,
+            txnId: rzpPayment.id,
+            amount: rzpPayment.amount / 100, // paise → rupees
+            currency: rzpPayment.currency || 'INR',
+            verificationSource: 'razorpay_api',
+            payload: rzpPayment,
           });
-
           if (updatedOrder) {
             isPaid = true;
             status = 'paid';
             queueService.dispatchOrderProcessing(updatedOrder, req.user || { _id: order.user });
           }
-        } catch (err) {
-          console.error('[Gateway Verification Inventory Error]', err.message);
         }
+      } catch (err) {
+        console.error('[Razorpay Re-verify Error]', err.message);
       }
     }
 
@@ -431,127 +428,56 @@ const getPaymentStatus = async (req, res) => {
  */
 const handlePaymentWebhook = async (req, res) => {
   try {
-    const signature =
-      req.headers['paycow-signature'] ||
-      req.headers['x-paycow-signature'] ||
-      req.headers['x-payment-signature'] ||
-      req.headers['x-autoupi-signature'] ||
-      req.headers['x-webhook-signature'] ||
-      req.headers['x-razorpay-signature'] ||
-      req.headers['signature'];
-    const timestamp =
-      req.headers['paycow-timestamp'] ||
-      req.headers['x-paycow-timestamp'] ||
-      req.headers['x-timestamp'] ||
-      req.body?.timestamp;
-    const secret =
-      process.env.PAYMENT_WEBHOOK_SECRET ||
-      process.env.AUTO_UPI_WEBHOOK_SECRET ||
-      process.env.WEBHOOK_SECRET;
+    // Razorpay sends signature in X-Razorpay-Signature header
+    const signature = req.headers['x-razorpay-signature'];
 
-    // 1. Cryptographic Signature & Token Verification
-    const isValidSignature =
-      verifyWebhookSignature(req.body, signature, secret, req.rawBody, timestamp) ||
-      autoUpiService.verifyWebhook(req.body, req.headers);
+    // Verify using Razorpay webhook secret
+    const isValidSignature = razorpayService.verifyWebhookSignature(req.rawBody || JSON.stringify(req.body), signature);
 
     if (!isValidSignature) {
-      console.warn('[Webhook Invalid Signature] Payload signature verification failed.');
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid cryptographic webhook signature or user token.',
-      });
+      console.warn('[Razorpay Webhook] Invalid signature.');
+      return res.status(401).json({ success: false, message: 'Invalid Razorpay webhook signature.' });
     }
 
     const payload = req.body || {};
-    const data = payload.data || payload.result || payload;
+    // Razorpay webhook payload structure: { event, payload: { payment: { entity: {...} } } }
+    const entity = payload?.payload?.payment?.entity || payload?.payload?.order?.entity || {};
+    const event_type = payload.event || '';
+    const razorpay_payment_id = entity.id || payload.razorpay_payment_id;
+    const razorpay_order_id = entity.order_id || payload.razorpay_order_id;
+    const amount = Number(entity.amount || 0) / 100; // paise → rupees
+    const currency = entity.currency || 'INR';
+    // session_id was stored in the Razorpay order notes / receipt
+    const session_id = entity.notes?.session_id || entity.receipt;
+    const order_id = razorpay_order_id || session_id;
 
-    // 2. Timestamp / Freshness Validation — reject stale or replayed events
-    const TOLERANCE_SECONDS = Number(process.env.WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) || 300; // 5 minutes
-    const rawTs = timestamp || payload.timestamp || payload.created_at || payload.event_time || null;
-    if (rawTs !== null && rawTs !== undefined) {
-      let webhookEpochMs;
-      if (typeof rawTs === 'number') {
-        // Distinguish Unix seconds (10 digits) from Unix milliseconds (13 digits)
-        webhookEpochMs = rawTs > 1e12 ? rawTs : rawTs * 1000;
-      } else if (!isNaN(Number(rawTs))) {
-        const numTs = Number(rawTs);
-        webhookEpochMs = numTs > 1e12 ? numTs : numTs * 1000;
-      } else {
-        // ISO-8601 or other parseable date string
-        webhookEpochMs = new Date(rawTs).getTime();
-      }
+    const timestamp = null; // Not applicable for Razorpay webhook freshness
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-      if (isNaN(webhookEpochMs)) {
-        console.warn(`[Webhook Timestamp Warning] Unparseable timestamp field: ${rawTs}`);
-      } else {
-        const ageSeconds = (Date.now() - webhookEpochMs) / 1000;
-        if (ageSeconds > TOLERANCE_SECONDS) {
-          console.warn(
-            `[Webhook Replay Blocked] Event is ${Math.round(ageSeconds)}s old — exceeds ${TOLERANCE_SECONDS}s tolerance.`
-          );
-          return res.status(408).json({
-            success: false,
-            message: `Webhook event is too old (${Math.round(ageSeconds)}s). Requests must arrive within ${TOLERANCE_SECONDS}s of their timestamp.`,
-          });
-        }
-        if (ageSeconds < -60) {
-          // Clock skew > 60 s into the future — reject as malformed
-          console.warn(`[Webhook Clock Skew] Event timestamp is ${Math.abs(Math.round(ageSeconds))}s in the future.`);
-          return res.status(400).json({
-            success: false,
-            message: 'Webhook event timestamp is in the future. Possible clock skew or replay.',
-          });
-        }
-      }
-    } else {
-      // Gateway did not include a timestamp — proceed but log for monitoring
-      console.warn('[Webhook No Timestamp] Payload contains no timestamp field. Freshness cannot be verified.');
-    }
-
-    const event_type = payload.event || payload.event_type || data.status || payload.status || 'payment.paid';
-    const txnId = data.txnId || data.txnid || data.transaction_id || data.utr || payload.txnId || payload.txnid || payload.transaction_id || payload.utr;
-    const payment_id = data.payment_id || payload.payment_id || txnId || `PAY_${data.order_id || payload.order_id || Date.now()}`;
-    const order_id = data.order_id || data.orderId || payload.order_id || payload.orderId;
-    const amount = Number(data.amount || data.totalPrice || payload.amount || payload.totalPrice || 0);
-    const currency = data.currency || payload.currency || 'INR';
-    const rawStatus = (data.status || payload.status || '').toLowerCase();
 
     if (!order_id) {
-      return res.status(400).json({ success: false, message: 'Missing order_id in webhook payload.' });
+      return res.status(400).json({ success: false, message: 'Missing order_id in Razorpay webhook payload.' });
     }
 
-    const event_id =
-      payload.event_id || `EVT_${order_id}_${txnId || payment_id}_${event_type}_${rawStatus}`;
+    const payment_id = razorpay_payment_id || `RZP_${order_id}_${Date.now()}`;
+    const txnId = razorpay_payment_id;
+    const rawStatus = event_type.toLowerCase();
 
-    // 2. Idempotency Guard - Avoid duplicate processing
+    const event_id = entity.id
+      ? `RZP_EVT_${entity.id}`
+      : `RZP_EVT_${order_id}_${event_type}_${Date.now()}`;
+
+    // Idempotency Guard — skip already-processed events
     const existingEvent = await WebhookEvent.findOne({ event_id });
     if (existingEvent && existingEvent.processed) {
-      console.log(`[Webhook Idempotency Skip] Event ${event_id} has already been processed.`);
-      return res.status(200).json({
-        success: true,
-        message: 'Webhook event already processed (Idempotent execution).',
-        processed: true,
-        event_id,
-      });
+      return res.status(200).json({ success: true, message: 'Already processed.', event_id });
     }
 
-    let webhookRecord =
-      existingEvent ||
-      new WebhookEvent({
-        event_id,
-        event_type,
-        payment_id,
-        order_id,
-        payload,
-        processed: false,
-        received_at: new Date(),
-      });
-
     const isPaidEvent =
-      event_type === 'payment.paid' ||
-      rawStatus === 'paid' ||
-      rawStatus === 'completed' ||
-      rawStatus === 'success';
+      event_type === 'payment.captured' ||
+      event_type === 'order.paid' ||
+      rawStatus.includes('captured') ||
+      rawStatus.includes('paid');
 
     if (isPaidEvent) {
       const validMongoId = mongooseValidId(order_id);

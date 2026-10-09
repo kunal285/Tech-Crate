@@ -2,25 +2,32 @@ const CheckoutSession = require('../models/CheckoutSession');
 const Product = require('../models/Product');
 const ProjectKit = require('../models/ProjectKit');
 const Coupon = require('../models/Coupon');
-const autoUpiService = require('../services/autoUpiService');
-const crypto = require('crypto');
+const razorpayService = require('../services/razorpayService');
 
-// @desc Initiate a checkout session (reserves inventory and gets payment URL)
+// @desc Initiate a checkout session — reserves inventory and creates a Razorpay order
 // @route POST /api/checkout/initiate
+// @access Private
 const initiateCheckout = async (req, res) => {
   const deductedItems = [];
   try {
-    const { orderItems, shippingAddress, paymentMethod = 'UPI', couponCode, redirect_url, failure_url, webhook_url } = req.body;
+    const {
+      orderItems,
+      shippingAddress,
+      paymentMethod = 'UPI',
+      couponCode,
+      redirect_url,
+      failure_url,
+    } = req.body;
 
     if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
-      return res.status(400).json({ message: 'Order must contain at least one item.' });
+      return res.status(400).json({ success: false, message: 'Order must contain at least one item.' });
     }
 
     if (!shippingAddress || !shippingAddress.fullName || !shippingAddress.street || !shippingAddress.city) {
-      return res.status(400).json({ message: 'Complete shipping address is required.' });
+      return res.status(400).json({ success: false, message: 'Complete shipping address is required.' });
     }
 
-    // 1. Server-side price calculation & atomic inventory reservation
+    // ── 1. Server-side price calculation & atomic inventory reservation ──────
     let itemsPrice = 0;
     const validatedItems = [];
 
@@ -33,45 +40,35 @@ const initiateCheckout = async (req, res) => {
       if (item.projectKit || item.itemType === 'kit') {
         const kitId = item.projectKit || item.product || item._id;
         const kit = await ProjectKit.findById(kitId);
-        if (!kit) {
-          throw new Error(`Project kit ${kitId} not found.`);
-        }
+        if (!kit) throw new Error(`Project kit ${kitId} not found.`);
+
         verifiedPrice = kit.price;
         title = kit.title;
         image = kit.image || image;
-
-        validatedItems.push({
-          title, quantity: qty, image, price: verifiedPrice, projectKit: kit._id, itemType: 'kit',
-        });
+        validatedItems.push({ title, quantity: qty, image, price: verifiedPrice, projectKit: kit._id, itemType: 'kit' });
       } else {
         const productId = item.product || item._id;
-        
-        // Atomically reserve inventory
+
+        // Atomic stock decrement with optimistic locking
         const product = await Product.findOneAndUpdate(
           { _id: productId, stock: { $gte: qty } },
           { $inc: { stock: -qty } },
           { new: true }
         );
 
-        if (!product) {
-          throw new Error(`Insufficient stock for product ID "${productId}".`);
-        }
+        if (!product) throw new Error(`Insufficient stock for product "${productId}".`);
 
         deductedItems.push({ productId, quantity: qty });
-
         verifiedPrice = product.price;
         title = product.title;
         image = (product.images && product.images[0]) || image;
-
-        validatedItems.push({
-          title, quantity: qty, image, price: verifiedPrice, product: product._id, itemType: 'product',
-        });
+        validatedItems.push({ title, quantity: qty, image, price: verifiedPrice, product: product._id, itemType: 'product' });
       }
 
       itemsPrice += verifiedPrice * qty;
     }
 
-    // 2. Server-side coupon verification & discount application
+    // ── 2. Coupon verification ────────────────────────────────────────────────
     let discountAmount = 0;
     let appliedCoupon = null;
 
@@ -91,29 +88,28 @@ const initiateCheckout = async (req, res) => {
             const rawDiscount = Math.round((itemsPrice * coupon.discountValue) / 100);
             discountAmount = coupon.maxDiscount ? Math.min(rawDiscount, coupon.maxDiscount) : rawDiscount;
           }
-
           appliedCoupon = cleanCode;
         }
       }
     }
 
-    // 3. Tax and Shipping calculations
+    // ── 3. Tax & shipping ─────────────────────────────────────────────────────
     const discountedSubtotal = Math.max(0, itemsPrice - discountAmount);
     const shippingPrice = discountedSubtotal >= 999 || discountedSubtotal === 0 ? 0 : 70;
-    const taxPrice = Math.round(discountedSubtotal * 0.18); // 18% standard GST
+    const taxPrice = Math.round(discountedSubtotal * 0.18); // 18% GST
     const totalPrice = discountedSubtotal + shippingPrice + taxPrice;
 
-    // 4. Create the CheckoutSession
+    // ── 4. Create CheckoutSession ──────────────────────────────────────────────
     const session = new CheckoutSession({
       user: req.user._id,
       orderItems: validatedItems,
       shippingAddress: {
         fullName: shippingAddress.fullName.trim(),
         phone: shippingAddress.phone || req.user.phone || 'N/A',
-        street: shippingAddress.street || shippingAddress.addressLine1 || 'Campus/Street',
-        city: shippingAddress.city || 'City',
-        state: shippingAddress.state || 'State',
-        pincode: shippingAddress.pincode || shippingAddress.postalCode || '000000',
+        street: shippingAddress.street || shippingAddress.addressLine1 || '',
+        city: shippingAddress.city || '',
+        state: shippingAddress.state || '',
+        pincode: shippingAddress.pincode || shippingAddress.postalCode || '',
         country: shippingAddress.country || 'India',
       },
       paymentMethod,
@@ -123,71 +119,64 @@ const initiateCheckout = async (req, res) => {
       totalPrice,
       discountApplied: discountAmount,
       coupon: appliedCoupon,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 mins expiry
-      reservedInventory: deductedItems
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min session
+      reservedInventory: deductedItems,
     });
 
     await session.save();
 
-    // If COD, we might just bypass AutoUPI and convert directly to Order
+    // ── 5. COD path — bypass Razorpay ─────────────────────────────────────────
     if (paymentMethod === 'COD') {
-      // For now, let's just return the session and let the client know.
-      // But COD usually confirms immediately. We will handle COD in another endpoint or directly here.
-      // Assuming online payment for now.
+      return res.status(201).json({
+        success: true,
+        session_id: session._id,
+        payment_method: 'COD',
+        amount: totalPrice,
+        currency: 'INR',
+        message: 'COD order session created. Confirm on the next step.',
+      });
     }
 
-    // 5. Generate Payment Intent with AutoUPI
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomHex = crypto.randomBytes(4).toString('hex').toUpperCase();
-    const payment_reference = `PAY-${dateStr}-${randomHex}`;
-    
-    session.payment_id = payment_reference;
-
-    const defaultSuccessRedirect = process.env.PAYMENT_SUCCESS_REDIRECT_URL || 'techcrate://payment/success';
-    const defaultFailedRedirect = process.env.PAYMENT_FAILED_REDIRECT_URL || 'techcrate://payment/failed';
-    const globalWebhookUrl = process.env.PAYMENT_GLOBAL_WEBHOOK_URL || `${req.protocol}://${req.get('host')}/api/webhooks/payment`;
-
-    const finalSuccessRedirectUrl = redirect_url || `${defaultSuccessRedirect}?session_id=${session._id}&status=paid`;
-    const finalFailedRedirectUrl = failure_url || `${defaultFailedRedirect}?session_id=${session._id}&status=failed`;
-    const finalWebhookUrl = webhook_url || globalWebhookUrl;
-
-    const autoUpiResponse = await autoUpiService.createOrder({
-      orderId: session._id.toString(), // Use session ID as gateway order ID
-      amount: totalPrice,
-      customerName: session.shippingAddress.fullName,
-      customerEmail: req.user.email || 'customer@techcrate.com',
-      customerMobile: session.shippingAddress.phone,
-      redirectUrl: finalSuccessRedirectUrl,
-      failureUrl: finalFailedRedirectUrl,
-      webhookUrl: finalWebhookUrl,
-    });
-
-    session.payment_url = autoUpiResponse.paymentUrl || null;
-    await session.save();
-
-    res.status(201).json({
-      success: true,
-      session_id: session._id,
-      payment_id: payment_reference,
+    // ── 6. Create Razorpay Order ───────────────────────────────────────────────
+    const rzpOrder = await razorpayService.createOrder({
+      orderId: session._id.toString(),
       amount: totalPrice,
       currency: 'INR',
-      payment_url: session.payment_url,
-      redirect_url: finalSuccessRedirectUrl,
-      is_fallback: autoUpiResponse.isFallback || false,
-      upi_intent_url: autoUpiResponse.upiIntentUrl,
-      qr_data: autoUpiResponse.qrData,
+      notes: {
+        customer_name: session.shippingAddress.fullName,
+        customer_phone: session.shippingAddress.phone,
+      },
+    });
+
+    // Store Razorpay order ID in session for webhook matching
+    session.payment_id = rzpOrder.razorpay_order_id;
+    await session.save();
+
+    return res.status(201).json({
+      success: true,
+      session_id: session._id,
+      razorpay_order_id: rzpOrder.razorpay_order_id,
+      razorpay_key_id: rzpOrder.key_id,
+      amount: rzpOrder.amount,          // in paise
+      amount_display: totalPrice,       // in rupees for display
+      currency: rzpOrder.currency,
+      is_sandbox: rzpOrder.isSandbox || false,
+      // Prefill data for Razorpay checkout modal
+      prefill: {
+        name: session.shippingAddress.fullName,
+        email: req.user.email || '',
+        contact: session.shippingAddress.phone || req.user.phone || '',
+      },
     });
 
   } catch (error) {
-    // Rollback deducted inventory if checkout initialization fails midway
+    // Roll back inventory if anything failed
     for (const item of deductedItems) {
       await Product.findByIdAndUpdate(item.productId, { $inc: { stock: item.quantity } }).catch(() => {});
     }
-
-    res.status(400).json({ message: error.message || 'Failed to initiate checkout.' });
+    console.error('[initiateCheckout Error]', error.message);
+    return res.status(400).json({ success: false, message: error.message || 'Failed to initiate checkout.' });
   }
 };
 
-module.exports = {
-  initiateCheckout,
-};
+module.exports = { initiateCheckout };

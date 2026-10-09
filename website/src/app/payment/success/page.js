@@ -21,7 +21,13 @@ export default function PaymentSuccessPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const returnedOrderId = params.get('order_id') || params.get('orderId') || '';
+    // Support both legacy order_id and new Razorpay session_id / razorpay_payment_id params
+    const returnedOrderId =
+      params.get('session_id') ||
+      params.get('order_id') ||
+      params.get('orderId') ||
+      params.get('razorpay_payment_id') ||
+      '';
     if (returnedOrderId) {
       setOrderId(returnedOrderId);
     } else {

@@ -149,11 +149,56 @@ export default function CheckoutPage() {
       }
 
       if (paymentMethod === 'UPI') {
-        const gatewayUrl = sessionData.payment_url || sessionData.upi_intent_url;
-        if (!gatewayUrl) {
-          throw new Error('Unable to get payment gateway URL.');
+        if (!sessionData.razorpay_order_id || !sessionData.razorpay_key_id) {
+          throw new Error('Payment gateway configuration error. Please try again.');
         }
-        window.location.href = gatewayUrl;
+
+        // Dynamically load Razorpay checkout script
+        await new Promise((resolve, reject) => {
+          if (document.getElementById('razorpay-checkout-js')) return resolve();
+          const script = document.createElement('script');
+          script.id = 'razorpay-checkout-js';
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load Razorpay checkout. Check your internet connection.'));
+          document.body.appendChild(script);
+        });
+
+        await new Promise((resolve, reject) => {
+          const options = {
+            key: sessionData.razorpay_key_id,
+            amount: sessionData.amount,
+            currency: sessionData.currency || 'INR',
+            name: 'Tech Crate',
+            description: 'Order Payment',
+            image: '/logo.png',
+            order_id: sessionData.razorpay_order_id,
+            prefill: {
+              name: sessionData.prefill?.name || shippingAddress.fullName,
+              email: sessionData.prefill?.email || user?.email || '',
+              contact: sessionData.prefill?.contact || shippingAddress.phone,
+            },
+            theme: { color: '#1E3A5F' },
+            handler: function (response) {
+              // Payment success — navigate to success page
+              clearCart();
+              router.push(
+                `/payment/success?razorpay_payment_id=${response.razorpay_payment_id}&session_id=${sessionData.session_id}&status=paid`
+              );
+              resolve(response);
+            },
+            modal: {
+              ondismiss: () => reject(new Error('Payment was cancelled.')),
+            },
+          };
+
+          const rzp = new window.Razorpay(options);
+          rzp.on('payment.failed', (resp) => {
+            reject(new Error(resp?.error?.description || 'Payment failed. Please try again.'));
+          });
+          rzp.open();
+        });
+
         return;
       }
 
@@ -161,7 +206,7 @@ export default function CheckoutPage() {
       clearCart();
       router.push(`/orders/${sessionData.session_id}?success=true`);
     } catch (err) {
-      console.warn('[Checkout Note]:', err?.response?.data?.message || err?.message);
+      console.warn('[Checkout Error]:', err?.response?.data?.message || err?.message);
       setError(
         err?.response?.data?.message ||
         err?.message ||
@@ -171,6 +216,7 @@ export default function CheckoutPage() {
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <div className="space-y-6 pb-16">

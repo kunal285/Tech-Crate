@@ -116,12 +116,9 @@ export default function CheckoutScreen({ route, navigation }) {
         paymentMethod: 'UPI',
       };
 
-      // Use unified initiateCheckout endpoint
+      // Use unified initiateCheckout endpoint (creates Razorpay order on backend)
       const res = await orderService.initiateCheckout({
         ...orderData,
-        redirect_url: 'techcrate://payment/success',
-        failure_url: 'techcrate://payment/failed',
-        webhook_url: 'https://tech-crate.onrender.com/api/webhooks/payment',
       });
 
       const sessionData = res.data || res;
@@ -130,24 +127,21 @@ export default function CheckoutScreen({ route, navigation }) {
         throw new Error(sessionData?.message || 'Failed to initialize checkout. Please try again.');
       }
 
-      const sessionId = sessionData.session_id;
-      // Prefer hosted payment page; fall back to UPI intent (direct UPI app chooser)
-      const hostedUrl = sessionData.payment_url;
-      const upiIntentUrl = sessionData.upi_intent_url;
-
-      if (!hostedUrl && !upiIntentUrl) {
-        throw new Error('Unable to initialize payment flow. No gateway URL was provided by the server.');
+      if (!sessionData.razorpay_order_id || !sessionData.razorpay_key_id) {
+        throw new Error('Payment gateway configuration is missing. Please contact support.');
       }
 
-      // Navigate to processing screen BEFORE opening the gateway so the user sees it immediately
+      // Open Razorpay in-app payment modal (no browser redirect needed)
+      const rzpResponse = await paymentService.openRazorpayCheckout(sessionData);
+
+      // rzpResponse = { razorpay_payment_id, razorpay_order_id, razorpay_signature }
+      // Navigate to processing screen — backend webhook will finalize the order
       navigation.replace('PaymentProcessing', {
-        order_id: sessionId,
-        orderId: sessionId,
+        order_id: sessionData.session_id,
+        orderId: sessionData.session_id,
+        razorpay_payment_id: rzpResponse.razorpay_payment_id,
       });
 
-      // Open the payment gateway — hosted page takes priority, UPI intent is the fallback
-      const urlToOpen = hostedUrl || upiIntentUrl;
-      await paymentService.openPaymentGateway(urlToOpen);
     } catch (error) {
       Alert.alert('Order Placement Error', error.message || 'Error processing your order');
     } finally {
