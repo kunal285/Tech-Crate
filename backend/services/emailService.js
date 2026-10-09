@@ -89,6 +89,7 @@ const sendSecurityAlertEmail = async (email, title, details) => {
 };
 
 module.exports = {
+  sendEmail: sendSecurityEmail,
   sendSecurityEmail,
   sendVerificationEmail,
   sendPasswordResetEmail,

@@ -6,9 +6,20 @@ const {
   handlePaymentWebhook,
   reconcilePaymentManual,
   getPaymentHistory,
+  renderPaymentSuccessPage,
+  renderPaymentFailedPage,
 } = require('../controllers/paymentController');
 const { protect, optionalProtect, authorizeRoles } = require('../middleware/authMiddleware');
 const { checkoutLimiter } = require('../middleware/rateLimiter');
+
+// 0. Success & Failure Redirect Landing Pages (AutoUPI / PayCow browser redirect)
+router.get(['/payment-success', '/success', '/callback'], renderPaymentSuccessPage);
+router.get(['/payment-failed', '/failed'], renderPaymentFailedPage);
+router.get('/', (req, res, next) => {
+  if (req.baseUrl.includes('payment-success')) return renderPaymentSuccessPage(req, res);
+  if (req.baseUrl.includes('payment-failed')) return renderPaymentFailedPage(req, res);
+  next();
+});
 
 // 1. Webhook endpoints (Cryptographically verified via HMAC signature)
 router.post('/webhook', handlePaymentWebhook);

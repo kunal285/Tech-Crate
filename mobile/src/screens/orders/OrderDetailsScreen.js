@@ -13,21 +13,17 @@ import {
   Package,
   MapPin,
   CreditCard,
-  Clock,
   CheckCircle,
-  Truck,
   Phone,
   Mail,
   XCircle,
-  ChevronRight,
-  ShieldCheck,
   AlertCircle,
 } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import SafeImage from '../../components/common/SafeImage';
 import Button from '../../components/common/Button';
-import { Colors } from '../../theme';
 import { orderService } from '../../services/orderService';
+import paymentService from '../../services/paymentService';
 
 export default function OrderDetailsScreen({ route, navigation }) {
   const { orderId, order: initialOrder } = route.params || {};
@@ -36,6 +32,8 @@ export default function OrderDetailsScreen({ route, navigation }) {
   const [order, setOrder] = useState(initialOrder || null);
   const [loading, setLoading] = useState(!initialOrder && !!activeOrderId);
   const [cancelling, setCancelling] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState('');
 
   const fetchOrderDetails = useCallback(async () => {
     if (!activeOrderId) return;
@@ -100,6 +98,39 @@ export default function OrderDetailsScreen({ route, navigation }) {
     });
   };
 
+  const handlePayNow = async () => {
+    if (!order || paying) return;
+    try {
+      setPaying(true);
+      setPaymentMessage('');
+      const payment = await paymentService.createPaymentOrder({
+        order_id: activeOrderId,
+        redirect_url: 'techcrate://payment/success',
+        failure_url: 'techcrate://payment/failed',
+      });
+
+      if (payment?.payment_url) {
+        await paymentService.openPaymentGateway(payment.payment_url);
+        navigation.replace('PaymentProcessing', {
+          order_id: activeOrderId,
+          orderId: activeOrderId,
+        });
+      } else if (payment?.upi_intent_url) {
+        await paymentService.openPaymentGateway(payment.upi_intent_url);
+        navigation.replace('PaymentProcessing', {
+          order_id: activeOrderId,
+          orderId: activeOrderId,
+        });
+      } else {
+        setPaymentMessage('Payment details could not be generated. Please try again.');
+      }
+    } catch (err) {
+      setPaymentMessage(err?.message || 'Payment initiation failed. Please try again.');
+    } finally {
+      setPaying(false);
+    }
+  };
+
   if (loading && !order) {
     return (
       <View style={styles.loadingContainer}>
@@ -134,8 +165,8 @@ export default function OrderDetailsScreen({ route, navigation }) {
   const isCancelled = status === 'cancelled' || status === 'returned';
 
   const timelineSteps = [
-    { title: 'Order Placed & Confirmed', time: 'Payment Verified', done: true },
-    { title: 'Packed & Anti-Static Sealed', time: 'Warehouse Quality Check', done: !isCancelled },
+    { title: 'Order Placed', time: order.isPaid ? 'Payment Verified' : 'Awaiting Payment', done: !isCancelled },
+    { title: 'Packed & Anti-Static Sealed', time: 'Warehouse Quality Check', done: order.isPaid && !isCancelled },
     { title: 'In Transit / Dispatched', time: 'Courier Partner Assigned', done: isShipped && !isCancelled },
     { title: 'Delivered', time: isDelivered ? 'Handed to Recipient' : 'Estimated 2-3 Business Days', done: isDelivered },
   ];
@@ -249,29 +280,32 @@ export default function OrderDetailsScreen({ route, navigation }) {
           </Text>
         </View>
 
-        {/* Payment Summary */}
+        {/* Payment section intentionally hidden on order details */}
+        {false && (
         <View style={styles.card}>
           <View style={styles.cardHeaderWithIcon}>
             <CreditCard size={17} color="#0284C7" />
-            <Text style={styles.sectionTitle}>Payment & Invoicing</Text>
+            <Text style={styles.sectionTitle}>Payment</Text>
           </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Payment Method</Text>
-            <Text style={styles.billValue}>{order.paymentMethod || 'UPI Instant'}</Text>
-          </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Payment Status</Text>
-            <Text style={styles.billValueGreen}>
-              {order.isPaid ? 'PAID' : 'CONFIRMED'}
-            </Text>
-          </View>
-          <View style={[styles.billRow, styles.billRowTotal]}>
-            <Text style={styles.billTotalLabel}>Total Amount Paid</Text>
-            <Text style={styles.billTotalValue}>
-              ₹{Number(order.totalPrice || order.itemsPrice || 0).toLocaleString('en-IN')}
-            </Text>
-          </View>
+          {!order.isPaid && order.paymentMethod === 'UPI' && !isCancelled && (
+            <View style={styles.paymentActionBox}>
+              <Text style={styles.paymentInstruction}>
+                Complete payment to confirm this order. The payable amount is calculated by the server.
+              </Text>
+              <TouchableOpacity
+                style={styles.payNowBtn}
+                onPress={handlePayNow}
+                disabled={paying}
+                activeOpacity={0.85}
+              >
+                <CreditCard size={16} color="#FFFFFF" />
+                <Text style={styles.payNowBtnText}>{paying ? 'Preparing payment...' : 'Pay Now'}</Text>
+              </TouchableOpacity>
+              {!!paymentMessage && <Text style={styles.paymentError}>{paymentMessage}</Text>}
+            </View>
+          )}
         </View>
+        )}
 
         {/* Need Help / Support Section with clickable phone and email */}
         <View style={styles.card}>
@@ -541,6 +575,41 @@ const styles = StyleSheet.create({
     borderTopColor: '#F1F5F9',
     marginTop: 6,
     paddingTop: 8,
+  },
+  paymentActionBox: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  paymentInstruction: {
+    color: '#92400E',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  payNowBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#0284C7',
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  payNowBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  paymentError: {
+    color: '#B91C1C',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 8,
   },
   billTotalLabel: {
     fontSize: 14,

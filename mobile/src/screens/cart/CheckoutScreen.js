@@ -18,15 +18,12 @@ import {
 } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
-import UpiAppChooserModal from '../../components/checkout/UpiAppChooserModal';
 import {
   GPayLogo,
   PhonePeLogo,
   PaytmLogo,
   UpiGenericLogo,
 } from '../../components/common/PaymentLogos';
-import { Colors } from '../../theme';
-import { API_BASE_URL } from '../../constants';
 import { useCartStore } from '../../store/cartStore';
 import { orderService } from '../../services/orderService';
 import paymentService from '../../services/paymentService';
@@ -39,7 +36,6 @@ export default function CheckoutScreen({ route, navigation }) {
 
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [loading, setLoading] = useState(false);
-  const [showUpiModal, setShowUpiModal] = useState(false);
 
   const [address, setAddress] = useState({
     fullName: '',
@@ -87,9 +83,8 @@ export default function CheckoutScreen({ route, navigation }) {
       return;
     }
 
-    // For UPI, open the interactive multi-UPI app selector (Google Pay, PhonePe, Paytm, CRED, BHIM, etc.)
     if (paymentMethod === 'UPI') {
-      setShowUpiModal(true);
+      await createOnlineOrder();
       return;
     }
 
@@ -97,11 +92,9 @@ export default function CheckoutScreen({ route, navigation }) {
     await processCodPayment();
   };
 
-  const handleUpiAppSelected = async (selectedAppId) => {
-    setShowUpiModal(false);
+  const createOnlineOrder = async () => {
     try {
       setLoading(true);
-      // 1. Send only trusted item IDs and quantities; backend calculates authoritative price and reserves inventory
       const orderData = {
         orderItems: items.map((i) => ({
           title: i.title || i.name,
@@ -123,56 +116,38 @@ export default function CheckoutScreen({ route, navigation }) {
         paymentMethod: 'UPI',
       };
 
-      const res = await orderService.createOrder(orderData);
-
-      if (!res || res.success === false) {
-        throw new Error(res?.message || 'Failed to place order. Please try again.');
-      }
-
-      const createdOrder = res.data?.order || res.order || res.data || res;
-      const targetOrderId = createdOrder._id || createdOrder.order_id;
-      const serverPayableAmount = createdOrder.totalPrice || grandTotal;
-
-      // 2. Obtain unique server payment reference & gateway intent
-      let paymentIntent = null;
-      try {
-        paymentIntent = await paymentService.createPaymentOrder({
-          order_id: String(targetOrderId),
-          redirect_url: 'techcrate://payment/success',
-          webhook_url: `${API_BASE_URL}/webhooks/payment`,
-        });
-      } catch (intentErr) {
-        console.warn('[Payment Intent Init Warning]', intentErr.message);
-      }
-
-      const paymentReference = paymentIntent?.payment_reference || paymentIntent?.payment_id || targetOrderId;
-      const finalPayable = paymentIntent?.amount || serverPayableAmount;
-
-      if (typeof clearCart === 'function') {
-        await clearCart();
-      }
-
-      // 3. Launch selected UPI App (or universal chooser) with server payment reference
-      try {
-        await paymentService.launchUpiPayment({
-          appId: selectedAppId,
-          amount: finalPayable,
-          orderId: paymentReference,
-          transactionNote: `Tech Crate Order #${targetOrderId}`,
-        });
-      } catch (upiLaunchError) {
-        console.warn('[Direct UPI Launch Fallback]', upiLaunchError.message);
-        const paymentUrl = paymentIntent?.payment_url;
-        if (paymentUrl) {
-          await paymentService.openPaymentGateway(paymentUrl);
-        }
-      }
-
-      // 4. Navigate to Payment Processing screen to poll backend authoritative state
-      navigation.replace('PaymentProcessing', {
-        order_id: targetOrderId,
-        orderId: targetOrderId,
+      // Use unified initiateCheckout endpoint
+      const res = await orderService.initiateCheckout({
+        ...orderData,
+        redirect_url: 'techcrate://payment/success',
+        failure_url: 'techcrate://payment/failed',
+        webhook_url: 'https://tech-crate.onrender.com/api/webhooks/payment',
       });
+
+      const sessionData = res.data || res;
+
+      if (!sessionData || sessionData.success === false) {
+        throw new Error(sessionData?.message || 'Failed to initialize checkout. Please try again.');
+      }
+
+      const sessionId = sessionData.session_id;
+      // Prefer hosted payment page; fall back to UPI intent (direct UPI app chooser)
+      const hostedUrl = sessionData.payment_url;
+      const upiIntentUrl = sessionData.upi_intent_url;
+
+      if (!hostedUrl && !upiIntentUrl) {
+        throw new Error('Unable to initialize payment flow. No gateway URL was provided by the server.');
+      }
+
+      // Navigate to processing screen BEFORE opening the gateway so the user sees it immediately
+      navigation.replace('PaymentProcessing', {
+        order_id: sessionId,
+        orderId: sessionId,
+      });
+
+      // Open the payment gateway — hosted page takes priority, UPI intent is the fallback
+      const urlToOpen = hostedUrl || upiIntentUrl;
+      await paymentService.openPaymentGateway(urlToOpen);
     } catch (error) {
       Alert.alert('Order Placement Error', error.message || 'Error processing your order');
     } finally {
@@ -245,6 +220,21 @@ export default function CheckoutScreen({ route, navigation }) {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.checkoutSteps}>
+          {[
+            ['1', 'Address', true],
+            ['2', 'Payment', true],
+            ['3', 'Done', false],
+          ].map(([step, title, active]) => (
+            <View key={step} style={styles.checkoutStep}>
+              <View style={[styles.stepCircle, active && styles.stepCircleActive]}>
+                <Text style={[styles.stepNumber, active && styles.stepNumberActive]}>{step}</Text>
+              </View>
+              <Text style={[styles.stepLabel, active && styles.stepLabelActive]}>{title}</Text>
+            </View>
+          ))}
+        </View>
+
         {/* Shipping Address Section */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
@@ -327,8 +317,8 @@ export default function CheckoutScreen({ route, navigation }) {
           {[
             {
               id: 'UPI',
-              title: 'Direct UPI & Apps',
-              subtitle: 'Google Pay, PhonePe, Paytm, CRED, BHIM & all apps',
+              title: 'Auto UPI Gateway',
+              subtitle: 'Google Pay, PhonePe, Paytm, QR (autoupigateway.com)',
               isUpi: true,
             },
             {
@@ -384,6 +374,14 @@ export default function CheckoutScreen({ route, navigation }) {
               </TouchableOpacity>
             );
           })}
+          <View style={styles.selectedPaymentInfo}>
+            <ShieldCheck size={16} color="#15803D" />
+            <Text style={styles.selectedPaymentInfoText}>
+              {paymentMethod === 'UPI'
+                ? 'You will continue to the secure UPI gateway after confirming your order.'
+                : 'Pay the delivery partner in cash when your order arrives.'}
+            </Text>
+          </View>
         </View>
 
         {/* Order Summary & Delivery Guarantee */}
@@ -431,19 +429,16 @@ export default function CheckoutScreen({ route, navigation }) {
           accessibilityLabel="Pay and Confirm Order"
         >
           <Text style={styles.confirmBtnText}>
-            {loading ? 'Initializing Gateway...' : 'Pay & Confirm'}
+            {loading
+              ? 'Processing...'
+              : paymentMethod === 'UPI'
+                ? 'Continue to payment'
+                : 'Place COD order'}
           </Text>
           {!loading && <ArrowRight size={17} color="#FFFFFF" />}
         </TouchableOpacity>
       </View>
 
-      {/* Multi-UPI App Selector Bottom Sheet */}
-      <UpiAppChooserModal
-        visible={showUpiModal}
-        onClose={() => setShowUpiModal(false)}
-        onSelectApp={handleUpiAppSelected}
-        amount={grandTotal}
-      />
     </View>
   );
 }
@@ -467,6 +462,48 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 3,
     elevation: 1,
+  },
+  checkoutSteps: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+  },
+  checkoutStep: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 4,
+  },
+  stepCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCircleActive: {
+    backgroundColor: '#0284C7',
+  },
+  stepNumber: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  stepNumberActive: {
+    color: '#FFFFFF',
+  },
+  stepLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  stepLabelActive: {
+    color: '#0369A1',
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -549,6 +586,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     lineHeight: 15,
+  },
+  selectedPaymentInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  selectedPaymentInfoText: {
+    flex: 1,
+    color: '#166534',
+    fontSize: 11,
+    lineHeight: 16,
   },
   guaranteeRow: {
     flexDirection: 'row',

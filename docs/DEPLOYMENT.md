@@ -1,81 +1,92 @@
-# Production Deployment Guide
+# Tech Crate — Deployment & Environment Configuration Guide
 
-This document outlines deployment architectures, environment configuration, SSL setup, and process management for **Tech Crate**.
+This document describes the deployment architecture, environment configurations, and production build instructions for all applications in the Tech Crate workspace.
 
 ---
 
-## 🚀 Deployment Overview
+## 1. Hosting Architecture Overview
 
-```mermaid
-graph LR
-    User["🌐 Internet Traffic"] --> Cloudflare["Cloudflare WAF / DNS / SSL"]
-    Cloudflare --> AdminHost["⚡ Vercel / Netlify<br/>(React Admin Panel)"]
-    Cloudflare --> BackendHost["🖥️ Cloud Server / PM2 / Render<br/>(Node.js Express API)"]
-    BackendHost --> MongoDBAtlas[("🍃 MongoDB Atlas Cluster")]
-    BackendHost --> CloudinaryCDN["🖼️ Cloudinary CDN"]
+| Application | Hosting Provider / Platform | Production URL | Dev URL |
+| :--- | :--- | :--- | :--- |
+| **Backend API** | Vercel / Render / Node VPS | `https://tech-crate.onrender.com` | `http://localhost:5000` |
+| **Customer Website** | Vercel (Next.js) | `https://techcrate-store.vercel.app` | `http://localhost:3000` |
+| **Admin Panel** | Vercel (Vite SPA) | `https://tech-crate-tau.vercel.app` | `http://localhost:5173` |
+| **Mobile App** | Android APK / Internal Release | Standalone APK (`assembleRelease`) | Metro Bundler (:8081 / :8082) |
+
+---
+
+## 2. Environment Variables Specification
+
+### A. Backend (`backend/.env`)
+```env
+PORT=5000
+NODE_ENV=production
+FRONTEND_URL=http://localhost:3000
+ADMIN_URL=http://localhost:5173
+
+# Database Connection
+MONGO_URI=mongodb+srv://<username>:<password>@cluster0.dxhqcj9.mongodb.net
+
+# JWT Secrets
+JWT_SECRET=<64-char-hex-secret>
+
+# Media & Storage
+CLOUDINARY_CLOUD_NAME=dmy7cmuq9
+CLOUDINARY_API_KEY=693495287588353
+CLOUDINARY_API_SECRET=<secret>
+
+# Firebase Admin
+FIREBASE_PROJECT_ID=techcrate-2e07a
+```
+
+### B. Website (`website/.env.local`)
+```env
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
+NEXT_PUBLIC_ADMIN_URL=http://localhost:5173
+NEXT_PUBLIC_APP_NAME="Tech Crate"
+NEXT_PUBLIC_APP_TAGLINE="Everything You Need to Build."
+```
+
+### C. Admin Panel (`admin/.env`)
+```env
+VITE_API_BASE_URL=http://localhost:5000/api
+VITE_WEBSITE_URL=http://localhost:3000
+```
+
+### D. Mobile App (`mobile/.env`)
+```env
+# Android Emulator local backend loopback
+API_BASE_URL=http://10.0.2.2:5000/api
+# Production fallback: https://tech-crate.onrender.com/api
+FIREBASE_PROJECT_ID=techcrate-2e07a
 ```
 
 ---
 
-## 1. Backend API Deployment (PM2 / Linux VPS)
+## 3. Production Build Instructions
 
-### Environment Setup:
-```bash
-sudo apt update && sudo apt install -y nodejs npm git
-sudo npm install -g pm2
-```
-
-### Build & Process Startup:
-```bash
-cd /var/www/techcrate/backend
-npm install --production
-
-# Start Express server with PM2 process manager
-pm2 start server.js --name "techcrate-api" --env production
-pm2 save
-pm2 startup
-```
-
----
-
-## 2. Admin Web Panel Deployment (Vite / Vercel / Nginx)
-
-### Build Static Assets:
-```bash
+### Admin Panel
+```powershell
 cd admin
 npm run build
-```
-Output static assets land in `admin/dist`.
-
-### Nginx Configuration Example (`/etc/nginx/sites-available/techcrate-admin`):
-```nginx
-server {
-    listen 80;
-    server_name admin.techcrate.com;
-
-    root /var/www/techcrate/admin/dist;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
+# Output: admin/dist/ ready for static hosting
 ```
 
----
+### Website (Next.js)
+```powershell
+cd website
+npm run build
+# Output: website/.next/ ready for Node/Vercel SSR
+```
 
-## 3. Mobile Application Release Builds
-
-### Android APK / AAB Generation:
-```bash
-cd mobile/android
+### Mobile App (Android APK Build)
+```powershell
+cd mobile
+# Bundle JavaScript assets
+npm run bundle:android
+# Assemble release APK
+cd android
 ./gradlew assembleRelease
 # Output: mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
-
----
-
-## 📊 Monitoring & Telemetry
-
-- **Error Monitoring**: Sentry initialized via `config/sentry.js`. Set `SENTRY_DSN` in environment variables.
-- **Process Health**: `pm2 status` and `pm2 logs techcrate-api`.

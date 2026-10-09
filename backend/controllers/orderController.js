@@ -54,14 +54,10 @@ const createOrder = async (req, res) => {
           throw new Error(`Product not found.`);
         }
 
-        // Atomic inventory deduction to prevent race conditions & negative stock
-        const updatedProduct = await Product.findOneAndUpdate(
-          { _id: productId, stock: { $gte: qty } },
-          { $inc: { stock: -qty } },
-          { new: true }
-        );
-
-        if (!updatedProduct) {
+        // Validate stock before payment verification. Inventory is reserved only after
+        // the backend confirms a successful payment, so the customer can safely retry
+        // without losing stock or cart state before the payment is trusted.
+        if (product.stock < qty) {
           throw new Error(`Insufficient stock for "${product.title}". Only ${product.stock} units remaining.`);
         }
 
@@ -143,8 +139,8 @@ const createOrder = async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // 5. Clear user's cart on checkout initiation
-    await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
+    // 5. Keep the cart intact until payment has been verified and an order is confirmed.
+    // This preserves the customer's cart across failed or abandoned payment attempts.
 
     res.status(201).json({
       success: true,
@@ -244,6 +240,39 @@ const cancelOrder = async (req, res) => {
   }
 };
 
+// @desc Switch an unpaid order to Cash on Delivery (COD)
+// @route PUT /api/orders/:id/switch-cod
+const switchOrderToCod = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const isOwner = order.user.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to modify this order' });
+    }
+
+    if (order.isPaid) {
+      return res.status(400).json({ success: false, message: 'Order is already marked as paid.' });
+    }
+
+    order.paymentMethod = 'COD';
+    order.orderStatus = 'Processing';
+    await order.save();
+
+    const queueService = require('../services/queueService');
+    queueService.dispatchOrderProcessing(order, req.user);
+
+    res.json({ success: true, message: 'Order switched to Cash on Delivery successfully.', order });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc Update order status (Admin / Seller only)
 // @route PUT /api/orders/:id/status
 const updateOrderStatus = async (req, res) => {
@@ -297,6 +326,7 @@ module.exports = {
   getMyOrders,
   getOrderById,
   cancelOrder,
+  switchOrderToCod,
   updateOrderStatus,
   getAllOrders,
 };

@@ -43,12 +43,14 @@ const populateLiveData = async () => {
       console.log(`[Live DB] Database active with ${userCount} users.`);
     }
 
+    const isFirstTimeInit = userCount === 0;
+
     const productCount = await Product.countDocuments();
-    if (productCount === 0 && liveProducts.length > 0) {
+    if (isFirstTimeInit && productCount === 0 && liveProducts.length > 0) {
       await Product.insertMany(liveProducts);
-      console.log(`[Live DB] Seeded ${liveProducts.length} authentic hardware components.`);
+      console.log(`[Live DB] Seeded ${liveProducts.length} initial authentic hardware components for fresh setup.`);
     } else {
-      console.log(`[Live DB] Catalog active with ${productCount} components.`);
+      console.log(`[Live DB] Catalog active with ${productCount} components (User-managed, preserved).`);
     }
 
     const posterCount = await Poster.countDocuments();

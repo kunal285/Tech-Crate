@@ -11,6 +11,7 @@ import {
   Sparkles,
   Layers,
   HelpCircle,
+  Cpu,
 } from 'lucide-react';
 import { productService } from '../../services/productService';
 import api from '../../services/api';
@@ -35,9 +36,20 @@ export default function AddProduct() {
 
   // Form State
   const [title, setTitle] = useState('');
+  const [sku, setSku] = useState('');
   const [category, setCategory] = useState('Microcontrollers');
   const [stock, setStock] = useState(25);
   const [description, setDescription] = useState('');
+  const [datasheetUrl, setDatasheetUrl] = useState('');
+
+  // Hardware Specifications State
+  const [specifications, setSpecifications] = useState({
+    operatingVoltage: '5V DC',
+    pinCount: 'N/A',
+    interface: 'I2C / SPI / GPIO',
+    dimensions: '',
+    weight: '',
+  });
 
   // Pricing State: Price & Discounted Price
   const [originalPrice, setOriginalPrice] = useState('');
@@ -161,6 +173,9 @@ export default function AddProduct() {
         discountPercentage: discountPercent || 0,
         features: features.filter((f) => f.trim().length > 0),
         images: validImages.slice(0, 4),
+        sku: sku.trim() || undefined,
+        datasheetUrl: datasheetUrl.trim() || '',
+        specifications,
       });
 
       navigate('/products');
@@ -257,6 +272,34 @@ export default function AddProduct() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                SKU / Part Number
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. TC-ESP32-DEV"
+                value={sku}
+                onChange={(e) => setSku(e.target.value.toUpperCase())}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Datasheet PDF Link (URL)
+              </label>
+              <input
+                type="url"
+                placeholder="https://..."
+                value={datasheetUrl}
+                onChange={(e) => setDatasheetUrl(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono text-xs"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
               Description *
@@ -319,11 +362,98 @@ export default function AddProduct() {
           </div>
         </div>
 
+        {/* Hardware Specifications Card */}
+        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <Cpu className="w-4 h-4 text-cyan-400" /> 3. Hardware Technical Specifications
+            </h3>
+            <span className="text-xs text-slate-400">Maker & engineering parameters</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Operating Voltage
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 3.3V - 5V DC"
+                value={specifications.operatingVoltage}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, operatingVoltage: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Pin Count / Header
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 30 Pins (2x15)"
+                value={specifications.pinCount}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, pinCount: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Bus / Interface
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. I2C / SPI / UART / PWM"
+                value={specifications.interface}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, interface: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Board Dimensions
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 51mm x 28mm"
+                value={specifications.dimensions}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, dimensions: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Weight
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 12g"
+                value={specifications.weight}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, weight: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Features / Highlights Card */}
         <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-cyan-400" /> 3. Key Product Features & Highlights
+              <Sparkles className="w-4 h-4 text-cyan-400" /> 4. Key Product Features & Highlights
             </h3>
             <span className="text-xs text-slate-400 font-mono">{features.length} Features Added</span>
           </div>

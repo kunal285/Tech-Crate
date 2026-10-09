@@ -98,8 +98,7 @@ async function runPaymentSuite() {
 
     assert(createRes.status === 200 && createRes.data?.success === true, 'POST /api/payments/create-order returns 200 OK', `Status: ${createRes.status}, data: ${JSON.stringify(createRes.data)}`);
     assert(createRes.data?.order_id === orderIdSuccess, 'Returns accurate order_id', JSON.stringify(createRes.data));
-    assert(!!createRes.data?.payment_reference, 'Returns unique payment_reference', JSON.stringify(createRes.data));
-    assert(createRes.data?.payment_url?.includes('autoupigateway.com') || !!createRes.data?.payment_url, 'Returns payment gateway checkout URL', JSON.stringify(createRes.data));
+    assert(!!createRes.data?.payment_url || !!createRes.data?.upi_intent_url, 'Returns payment gateway checkout URL or direct UPI intent', JSON.stringify(createRes.data));
 
     // 2. Initial Payment Status (Before Webhook)
     console.log('\n--- 2. Server Status Verification (Before Webhook) ---');

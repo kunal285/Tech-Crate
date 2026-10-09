@@ -8,6 +8,8 @@ import {
   Image as ImageIcon,
   Sparkles,
   Plus,
+  Cpu,
+  Archive,
 } from 'lucide-react';
 import { productService } from '../../services/productService';
 import api from '../../services/api';
@@ -27,6 +29,7 @@ const CATEGORIES = [
 export default function EditProduct() {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState(null);
@@ -34,9 +37,21 @@ export default function EditProduct() {
 
   // Form State
   const [title, setTitle] = useState('');
+  const [sku, setSku] = useState('');
   const [category, setCategory] = useState('Microcontrollers');
   const [stock, setStock] = useState(25);
   const [description, setDescription] = useState('');
+  const [datasheetUrl, setDatasheetUrl] = useState('');
+  const [isArchived, setIsArchived] = useState(false);
+
+  // Hardware Specifications State
+  const [specifications, setSpecifications] = useState({
+    operatingVoltage: '5V DC',
+    pinCount: 'N/A',
+    interface: 'I2C / SPI / GPIO',
+    dimensions: '',
+    weight: '',
+  });
 
   // Pricing State: Price & Discounted Price
   const [originalPrice, setOriginalPrice] = useState('');
@@ -61,12 +76,22 @@ export default function EditProduct() {
       const data = await productService.getProductById(id);
       if (data) {
         setTitle(data.title || '');
+        setSku(data.sku || '');
         setCategory(data.category || 'Microcontrollers');
         setStock(data.stock !== undefined ? data.stock : 25);
         setDescription(data.description || '');
+        setDatasheetUrl(data.datasheetUrl || '');
+        setIsArchived(Boolean(data.isArchived));
         setOriginalPrice(data.originalPrice || data.price || '');
         setDiscountedPrice(data.discountedPrice || (data.originalPrice && data.price < data.originalPrice ? data.price : ''));
         setFeatures(Array.isArray(data.features) ? data.features : []);
+        setSpecifications({
+          operatingVoltage: data.specifications?.operatingVoltage || '5V DC',
+          pinCount: data.specifications?.pinCount || 'N/A',
+          interface: data.specifications?.interface || 'I2C / SPI / GPIO',
+          dimensions: data.specifications?.dimensions || '',
+          weight: data.specifications?.weight || '',
+        });
 
         const imgs = Array.isArray(data.images) ? [...data.images] : [];
         while (imgs.length < 4) imgs.push('');
@@ -157,6 +182,11 @@ export default function EditProduct() {
         discountPercentage: discountPercent || 0,
         features: features.filter((f) => f.trim().length > 0),
         images: validImages.slice(0, 4),
+        sku: sku.trim() || undefined,
+        datasheetUrl: datasheetUrl.trim() || '',
+        isArchived,
+        status: isArchived ? 'archived' : 'active',
+        specifications,
       });
 
       navigate('/products');
@@ -250,6 +280,62 @@ export default function EditProduct() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                SKU / Part Number
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. TC-ESP32-DEV"
+                value={sku}
+                onChange={(e) => setSku(e.target.value.toUpperCase())}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Datasheet PDF Link (URL)
+              </label>
+              <input
+                type="url"
+                placeholder="https://..."
+                value={datasheetUrl}
+                onChange={(e) => setDatasheetUrl(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+              Catalog Status
+            </label>
+            <div className="flex items-center gap-3 p-3 bg-slate-900 border border-slate-800 rounded-xl">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-white">
+                <input
+                  type="radio"
+                  name="archiveStatus"
+                  checked={!isArchived}
+                  onChange={() => setIsArchived(false)}
+                  className="text-cyan-500 focus:ring-cyan-500"
+                />
+                <span className="font-semibold text-emerald-400">Active (Visible on Customer Storefront)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-white ml-4">
+                <input
+                  type="radio"
+                  name="archiveStatus"
+                  checked={isArchived}
+                  onChange={() => setIsArchived(true)}
+                  className="text-amber-500 focus:ring-amber-500"
+                />
+                <span className="font-semibold text-amber-400">Archived (De-listed from Storefront)</span>
+              </label>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Description *</label>
             <textarea
@@ -305,11 +391,98 @@ export default function EditProduct() {
           </div>
         </div>
 
+        {/* Hardware Specifications Card */}
+        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <Cpu className="w-4 h-4 text-cyan-400" /> 3. Hardware Technical Specifications
+            </h3>
+            <span className="text-xs text-slate-400">Maker & engineering parameters</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Operating Voltage
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 3.3V - 5V DC"
+                value={specifications.operatingVoltage}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, operatingVoltage: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Pin Count / Header
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 30 Pins (2x15)"
+                value={specifications.pinCount}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, pinCount: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Bus / Interface
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. I2C / SPI / UART / PWM"
+                value={specifications.interface}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, interface: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Board Dimensions
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 51mm x 28mm"
+                value={specifications.dimensions}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, dimensions: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                Weight
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 12g"
+                value={specifications.weight}
+                onChange={(e) =>
+                  setSpecifications((prev) => ({ ...prev, weight: e.target.value }))
+                }
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Features / Highlights Card */}
         <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-cyan-400" /> 3. Key Product Features & Highlights
+              <Sparkles className="w-4 h-4 text-cyan-400" /> 4. Key Product Features & Highlights
             </h3>
             <span className="text-xs text-slate-400 font-mono">{features.length} Features</span>
           </div>

@@ -21,6 +21,9 @@ app.set('trust proxy', 1);
 // Connect Database
 connectDB();
 
+// Start Background Jobs
+require('./services/checkoutCleanupService');
+
 // Production Security Headers via Helmet
 app.use(
   helmet({
@@ -92,7 +95,15 @@ app.use(
 );
 
 // Body Parsers with payload size limits (protect against large body Denial of Service)
-app.use(express.json({ limit: '1mb' }));
+// Captures rawBody buffer for cryptographic payment webhook signature verification (PayCow / AutoUPI)
+app.use(
+  express.json({
+    limit: '1mb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 if (process.env.NODE_ENV !== 'production') {
@@ -107,6 +118,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/cart', require('./routes/cartRoutes'));
+app.use('/api/checkout', require('./routes/checkoutRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/seller', require('./routes/sellerRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
@@ -117,6 +129,8 @@ app.use('/api/banners', require('./routes/posterRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/webhooks', require('./routes/paymentRoutes'));
+app.use(['/autoupi-webhook', '/api/autoupi-webhook'], require('./routes/paymentRoutes'));
+app.use(['/payment-success', '/payment-failed'], require('./routes/paymentRoutes'));
 
 // Interactive Swagger / OpenAPI Documentation
 const swaggerUi = require('swagger-ui-express');

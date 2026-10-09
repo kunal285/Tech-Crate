@@ -22,7 +22,7 @@ export default function PaymentProcessingScreen({ route, navigation }) {
         const res = await paymentService.getPaymentStatus(targetOrderId);
         if (res && res.isPaid) {
           navigation.replace('PaymentResult', {
-            order_id: targetOrderId,
+            order_id: res.final_order_id || targetOrderId,
             status: 'paid',
             paymentDetails: res,
           });

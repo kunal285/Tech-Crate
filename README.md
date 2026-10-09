@@ -117,6 +117,13 @@ TechCrate/
 │   │   │   └── DashboardPage.jsx # Analytics & KPI metrics
 │   │   └── services/         # Axios API clients
 │   └── vite.config.js        # Vite build configuration
+├── website/                  # Customer Web Storefront & DIY Hub (Next.js 14 / React / Tailwind)
+│   ├── src/
+│   │   ├── app/              # App Router (Home, Catalog, Product Details, Projects, Cart, Checkout, Auth, Orders)
+│   │   ├── components/       # Header, Footer, ProductCard, BannerCarousel, ImageGallery
+│   │   ├── context/          # AuthContext (session, OTP) & CartContext (persistent cart, coupons)
+│   │   └── lib/              # api client, constants, shipping rates
+│   └── package.json          # Next.js configuration and scripts
 │
 └── mobile/                   # React Native Mobile App (Tech Crate)
     ├── android/              # Native Android project configuration
@@ -211,6 +218,35 @@ API_BASE_URL=http://10.0.2.2:5000/api
 Run on an Android device or emulator:
 ```bash
 npm run android
+```
+
+---
+
+### 4. Customer Web Storefront Setup (Next.js 14)
+
+```bash
+cd website
+npm install
+```
+
+Configure `website/.env.local`:
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
+```
+
+Start the Next.js storefront server:
+```bash
+npm run dev
+# Or from project root:
+npm run dev:website
+```
+Customer web application will be accessible at **`http://localhost:3001`**.
+
+To build the production bundle:
+```bash
+npm run build
+# Or from project root:
+npm run build:website
 ```
 
 ---

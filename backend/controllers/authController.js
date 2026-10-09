@@ -350,11 +350,30 @@ const loginUser = async (req, res) => {
   }
 };
 
-// @desc Google & Facebook Social Authentication (Login & Registration)
-// @route POST /api/auth/social-auth
+// @desc Google & Social Authentication (Login & Registration)
+// @route POST /api/auth/social-auth & POST /api/auth/google-login
 const socialAuth = async (req, res) => {
   try {
-    const { provider, email, name, photoUrl, providerId, role } = req.body;
+    let { provider = 'google', email, name, photoUrl, idToken, credential, role } = req.body;
+
+    // 1. If Google JWT credential/idToken is provided (Google Identity Services / One Tap / Mobile)
+    const rawToken = credential || idToken;
+    let googleSub = null;
+
+    if (rawToken) {
+      try {
+        const decoded = jwt.decode(rawToken);
+        if (decoded && decoded.email) {
+          email = decoded.email;
+          name = decoded.name || name;
+          photoUrl = decoded.picture || photoUrl;
+          googleSub = decoded.sub;
+          provider = 'google';
+        }
+      } catch (tokenErr) {
+        console.warn('[Google Token Decode Warning]', tokenErr.message);
+      }
+    }
 
     if (!provider || !['google', 'facebook'].includes(provider.toLowerCase())) {
       return res.status(400).json({ message: 'Valid provider (google or facebook) is required.' });
@@ -365,22 +384,43 @@ const socialAuth = async (req, res) => {
     }
 
     const cleanEmail = String(email).trim().toLowerCase();
-    let user = await User.findOne({ email: cleanEmail });
+    
+    // Find existing user by googleId, email, or firebaseUid
+    let user = await User.findOne({
+      $or: [
+        ...(googleSub ? [{ googleId: googleSub }] : []),
+        { email: cleanEmail },
+      ],
+    });
 
     if (!user) {
-      // Auto-register new user via social auth
+      // Auto-register new user via Google / Social auth
       const providerTitle = provider.toLowerCase() === 'google' ? 'Google' : 'Facebook';
       user = await User.create({
         name: (name && name.trim()) || `${providerTitle} User`,
         email: cleanEmail,
+        googleId: googleSub || undefined,
         avatar: photoUrl || undefined,
         role: role && ['customer', 'student'].includes(role) ? role : 'customer',
         isEmailVerified: true,
       });
       await logSecurityEvent(user._id, 'SOCIAL_REGISTER_SUCCESS', req, { provider });
     } else {
-      if (photoUrl && !user.avatar) {
+      // User exists: update Google ID, avatar and email verification
+      let needsSave = false;
+      if (googleSub && !user.googleId) {
+        user.googleId = googleSub;
+        needsSave = true;
+      }
+      if (photoUrl && (!user.avatar || user.avatar.includes('unsplash'))) {
         user.avatar = photoUrl;
+        needsSave = true;
+      }
+      if (!user.isEmailVerified && provider.toLowerCase() === 'google') {
+        user.isEmailVerified = true;
+        needsSave = true;
+      }
+      if (needsSave) {
         await user.save();
       }
       await logSecurityEvent(user._id, 'SOCIAL_LOGIN_SUCCESS', req, { provider });
@@ -403,6 +443,7 @@ const socialAuth = async (req, res) => {
     };
 
     res.json({
+      success: true,
       message: `Successfully authenticated with ${provider}`,
       ...userPayload,
       user: userPayload,

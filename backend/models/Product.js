@@ -97,13 +97,24 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ['active', 'archived', 'draft'],
+      default: 'active',
+      index: true,
+    },
   },
   { timestamps: true }
 );
 
 // Performance & Search Indexes
 productSchema.index({ title: 'text', description: 'text', sku: 'text' });
-productSchema.index({ category: 1, price: 1 });
-productSchema.index({ createdAt: -1 });
+productSchema.index({ isArchived: 1, category: 1, price: 1 });
+productSchema.index({ isArchived: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Product', productSchema);

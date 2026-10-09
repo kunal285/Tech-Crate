@@ -51,20 +51,16 @@ const useProductStore = create((set, get) => ({
           ? result.data
           : result.data?.products || [];
         
-        if (items.length > 0) {
-          const newProducts = append ? [...get().products, ...items] : items;
-          set(state => ({
-            products: newProducts,
-            pagination: result.data?.pagination || state.pagination,
-            isLoading: false,
-          }));
+        const newProducts = append ? [...get().products, ...items] : items;
+        set(state => ({
+          products: newProducts,
+          pagination: result.data?.pagination || state.pagination,
+          isLoading: false,
+        }));
 
-          // Cache fresh product list
-          if (!append) {
-            AsyncStorage.setItem(STORAGE_KEYS.PRODUCTS_CACHE, JSON.stringify(items)).catch(() => {});
-          }
-        } else {
-          set({ isLoading: false });
+        // Cache fresh product list or clear cache if empty
+        if (!append) {
+          AsyncStorage.setItem(STORAGE_KEYS.PRODUCTS_CACHE, JSON.stringify(items)).catch(() => {});
         }
         return result;
       } else {

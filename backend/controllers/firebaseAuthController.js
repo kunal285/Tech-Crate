@@ -115,31 +115,36 @@ const firebaseLogin = async (req, res) => {
       });
     }
 
-    const { uid, phone_number: firebasePhone } = decoded;
+    const { uid, phone_number: firebasePhone, email: firebaseEmail, name: firebaseName, picture: firebasePicture } = decoded;
 
-    if (!firebasePhone) {
+    if (!firebasePhone && !firebaseEmail) {
       return res.status(400).json({
         success: false,
-        message: 'No verified phone number associated with this Firebase credential.',
+        message: 'No verified phone number or email associated with this Firebase credential.',
       });
     }
 
-    const cleanPhone = normalizePhone(firebasePhone);
+    const cleanPhone = firebasePhone ? normalizePhone(firebasePhone) : '';
+    const cleanEmail = firebaseEmail ? String(firebaseEmail).trim().toLowerCase() : '';
 
-    // 2. Lookup existing user by firebaseUid or phone
+    // 2. Lookup existing user by firebaseUid, phone, or email
     let user = await User.findOne({
-      $or: [{ firebaseUid: uid }, { phone: cleanPhone }],
+      $or: [
+        { firebaseUid: uid },
+        ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+        ...(cleanEmail ? [{ email: cleanEmail }] : []),
+      ],
     });
 
     // 3. STRICT ADMIN ISOLATION GUARD
     if (user && user.role === 'admin') {
       await logSecurityEvent(user._id, 'FIREBASE_AUTH_FAILED', req, {
-        reason: 'Attempted admin login via Customer Firebase Phone Auth endpoint',
+        reason: 'Attempted admin login via Customer Firebase Auth endpoint',
         firebaseUid: uid,
       });
       return res.status(403).json({
         success: false,
-        message: 'Admin accounts are isolated and cannot authenticate via Customer/Student Phone Auth. Use the dedicated Admin Console.',
+        message: 'Admin accounts are isolated and cannot authenticate via Customer/Student Auth. Use the dedicated Admin Console.',
       });
     }
 
@@ -149,19 +154,27 @@ const firebaseLogin = async (req, res) => {
     if (!user) {
       const targetRole = accountType === 'student' ? 'student' : 'customer';
       user = await User.create({
-        name: name && name.trim() ? name.trim() : `User ${cleanPhone.slice(-4)}`,
-        phone: cleanPhone,
+        name: (name && name.trim()) || firebaseName || (cleanEmail ? cleanEmail.split('@')[0] : `User ${cleanPhone.slice(-4)}`),
+        phone: cleanPhone || undefined,
+        email: cleanEmail || undefined,
+        avatar: firebasePicture || undefined,
         firebaseUid: uid,
         role: targetRole,
         college: college || '',
         branch: branch || '',
         studentId: studentId || '',
-        isPhoneVerified: true,
+        isPhoneVerified: !!cleanPhone,
+        isEmailVerified: !!cleanEmail,
       });
     } else {
-      // User exists: update firebaseUid and phone verification
+      // User exists: update firebaseUid, verification, and details
       if (!user.firebaseUid) {
         user.firebaseUid = uid;
+      }
+      if (cleanPhone) user.isPhoneVerified = true;
+      if (cleanEmail) user.isEmailVerified = true;
+      if (firebasePicture && (!user.avatar || user.avatar.includes('unsplash'))) {
+        user.avatar = firebasePicture;
       }
       user.isPhoneVerified = true;
       if (college) user.college = college;

@@ -103,11 +103,36 @@ const paymentService = {
     if (!paymentUrl) {
       throw new Error('Invalid payment gateway URL.');
     }
-    const canOpen = await Linking.canOpenURL(paymentUrl).catch(() => true);
-    if (canOpen) {
-      return await Linking.openURL(paymentUrl);
-    } else {
-      throw new Error('Unable to open payment browser.');
+
+    const isUpiIntent = paymentUrl.startsWith('upi://');
+    const isHttpUrl = paymentUrl.startsWith('http://') || paymentUrl.startsWith('https://');
+
+    try {
+      if (isUpiIntent) {
+        // Android: canOpenURL for upi:// requires QUERY_INTENT_PACKAGES permission
+        // and may return false even when UPI apps are installed.
+        // Always attempt to open directly; OS will show the app chooser.
+        await Linking.openURL(paymentUrl);
+        return;
+      }
+
+      if (isHttpUrl) {
+        const canOpen = await Linking.canOpenURL(paymentUrl).catch(() => true);
+        if (canOpen) {
+          await Linking.openURL(paymentUrl);
+          return;
+        }
+        throw new Error('Cannot open payment page. Please check your internet connection.');
+      }
+
+      // Unknown scheme — attempt directly
+      await Linking.openURL(paymentUrl);
+    } catch (err) {
+      throw new Error(
+        err?.message?.includes('Cannot open payment')
+          ? err.message
+          : 'Unable to open payment app. Please ensure a UPI app (Google Pay, PhonePe, Paytm) is installed and try again.'
+      );
     }
   },
 

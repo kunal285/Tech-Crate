@@ -1,116 +1,120 @@
-# Tech Crate Technical Architecture
+# Tech Crate — Complete Full-Stack Architecture Documentation
 
-This document provides a comprehensive overview of the technical architecture, component relationships, data flow, and design patterns implemented in **Tech Crate (TechCrate)**.
+This document outlines the multi-application architecture of **Tech Crate**, connecting the Customer Mobile App, Customer Next.js Website, React/Vite Admin Panel, and the Node.js/Express/MongoDB/Firebase Backend API.
 
 ---
 
-## 🏗️ High-Level System Architecture
-
-Tech Crate follows a 3-tier decoupling architecture separating client presentation, RESTful business logic, and persistent storage.
+## 1. System Overview & Architecture Topology
 
 ```mermaid
 graph TD
-    subgraph Clients
-        MobileApp["📱 React Native Mobile App<br/>(Android & iOS)"]
-        AdminPanel["💻 React 18 + Vite Admin Panel<br/>(Web Dashboard)"]
+    subgraph Client Layer
+        Mobile["📱 Mobile App<br/>(React Native CLI / Android & iOS)"]
+        Website["🌐 Customer Website<br/>(Next.js / SSR & Static)"]
+        Admin["💻 Admin Web Portal<br/>(React + Vite + Tailwind CSS)"]
     end
 
-    subgraph Backend Services
-        APIServer["⚡ Node.js / Express REST API Server"]
-        AuthModule["🔐 Auth & Security Layer<br/>(JWT, OTP, Firebase Auth, RateLimiter, Zod)"]
-        AuditModule["📜 Security Audit & Telemetry Service"]
-        CloudinaryService["🖼️ Cloudinary CDN Media Storage"]
-        PaymentGateway["💳 Razorpay Payment Gateway"]
-        SentryService["📊 Sentry Error Monitoring"]
+    subgraph API & Application Layer
+        Express["⚡ Express.js REST API Server (:5000)<br/>(Controllers, Middleware, Validators, Services)"]
+        AuthLayer["🔐 Auth & Security Layer<br/>(JWT, Roles: admin/seller/customer, Zod, Rate Limiter)"]
+        FirebaseSvcs["🔥 Firebase Services<br/>(Firebase Admin SDK, FCM Messaging, Auth)"]
+        CloudinaryMedia["🖼️ Cloudinary CDN<br/>(Media Storage & URL Delivery)"]
+        AutoUPI["💳 Payment Gateway<br/>(AutoUPI / Webhook Server-to-Server)"]
     end
 
     subgraph Data Tier
-        MongoDB[("🍃 MongoDB Database<br/>(Users, Products, Orders, Posters, Audit)")]
-        SupabaseSQL[("🐘 Supabase PostgreSQL<br/>(Export Schema Support)")]
+        MongoDB[("🍃 MongoDB Atlas<br/>(Products, Orders, Users, Categories, Coupons, Banners)")]
     end
 
-    MobileApp -->|HTTPS / JSON REST API| APIServer
-    AdminPanel -->|HTTPS / JSON REST API| APIServer
+    Mobile -->|REST JSON API| Express
+    Website -->|REST JSON API| Express
+    Admin -->|REST JSON API| Express
 
-    APIServer --> AuthModule
-    APIServer --> AuditModule
-    APIServer --> MongoDB
-    APIServer --> CloudinaryService
-    APIServer --> PaymentGateway
-    APIServer --> SentryService
+    Express --> AuthLayer
+    Express --> FirebaseSvcs
+    Express --> CloudinaryMedia
+    Express --> AutoUPI
+    Express --> MongoDB
 ```
 
 ---
 
-## 📱 Client Layer Architecture
+## 2. Application Modules Breakdown
 
-### 1. React Native Mobile App (`mobile/`)
-- **State Management**: **Zustand** stores (`authStore`, `productStore`, `cartStore`, `posterStore`, `wishlistStore`, `projectStore`).
-- **Navigation**: **React Navigation 6** stack navigator split into `CustomerNavigator`, `AdminNavigator`, and `SellerNavigator`.
-- **UI & Styling**: Custom design token system (`theme/colors.js`), native vector icons, and custom components (`CaptchaBox`, `PosterCarousel`, `SafeImage`).
-- **Authentication Services**: `authService.js`, `firebaseAuthService.js`, and `socialAuthService.js`.
+### A. Customer Mobile Application (`/mobile`)
+- **Framework**: React Native CLI (bare React Native, JavaScript / JSX only).
+- **Navigation**: React Navigation (`@react-navigation/native`, `@react-navigation/stack`, `@react-navigation/bottom-tabs`).
+- **State Management**: Zustand stores (`authStore`, `productStore`, `cartStore`, `wishlistStore`).
+- **API Client**: Axios with automatic JWT Bearer token attachment and token refresh.
+- **Backend Host Resolution**:
+  - Android Emulator: `http://10.0.2.2:5000/api`
+  - iOS Simulator & Physical Device (ADB reverse): `http://localhost:5000/api`
+  - Configurable via `.env` (`API_BASE_URL`).
 
-### 2. Admin Web Control Panel (`admin/`)
-- **Framework**: **React 18** bundled with **Vite** for fast HMR.
-- **Styling**: Tailwind CSS + custom UI widgets.
-- **State Management**: Zustand stores (`adminAuthStore.js`, `authStore.js`).
-- **API Interceptors**: Axios client with JWT bearer token auto-injection and refresh token handling.
+### B. Customer Website (`/website`)
+- **Framework**: Next.js (React, JavaScript / JSX only).
+- **Styling**: Tailwind CSS with custom TechCrate electronics maker theme.
+- **Pages & Routes**:
+  - `/` — Homepage featuring Hero, Categories, Featured Components, DIY Project Kits, Value Props.
+  - `/products` — Product Catalog with category filtering, search, sorting, and pagination.
+  - `/products/[id]` — Detailed hardware component specifications, dynamic image gallery, stock badge, add to cart.
+  - `/projects` — DIY project kits, schematics, and bill-of-materials.
+  - `/cart` & `/checkout` — Cart management, coupon application, address input, UPI order placement.
+  - `/orders` & `/account` — Customer account overview, order tracking, address book.
+  - `/ai-assistant` — Interactive AI component selector & circuit advisor.
+- **Port**: `http://localhost:3000`.
+
+### C. Backend API Server (`/backend`)
+- **Runtime & Framework**: Node.js, Express.js.
+- **Database**: MongoDB (via Mongoose ODM).
+- **Authentication**: JWT authentication with access tokens and refresh tokens. Role-based access control (`customer`, `seller`, `admin`).
+- **Security Middleware**:
+  - Helmet for security HTTP headers.
+  - Express-Mongo-Sanitize for NoSQL injection prevention.
+  - Strict CORS policy supporting website (`:3000`), admin (`:5173`), mobile emulators (`10.0.2.2:5000`), and production domains.
+  - Route-level rate limiting (`apiLimiter`, `authLimiter`).
+  - Zod validation for incoming request payloads.
+- **Port**: `http://localhost:5000`.
+
+### D. Admin Control Panel (`/admin`)
+- **Framework**: React 18, Vite.
+- **Port**: `http://localhost:5173` (isolated from Next.js website port 3000).
+- **Features**:
+  - Overview Dashboard with live sales, orders, and stock telemetry.
+  - Product Management: Creation, modification, soft-delete/archival, multi-image upload, specifications.
+  - Category & Subcategory Management.
+  - Order Processing: Status progression (Pending → Processing → Shipped → Delivered / Cancelled).
+  - Coupon & Banner management.
+  - Push Notification dispatching via Firebase Cloud Messaging.
 
 ---
 
-## ⚡ Backend REST API Layer (`backend/`)
+## 3. Data Flow & Single Source of Truth
 
-- **Server Runtime**: Express.js on Node.js v18/v20.
-- **Security & Middleware**:
-  - `helmet`: HTTP headers security.
-  - `express-mongo-sanitize`: NoSQL injection defense.
-  - `xss-clean`: Input HTML sanitization.
-  - `rateLimiter.js`: Express rate limiting per route.
-  - `zodValidation.js`: Payload schema validation.
-  - `authMiddleware.js`: JWT token verification and role-based access authorization (`admin`, `seller`, `customer`).
-- **Observability**: Sentry SDK initialization (`config/sentry.js`) and audit logger (`services/auditService.js`).
+All business data (products, prices, discounts, inventory, orders, customer records) originate and persist exclusively in **MongoDB** through the **Express API**:
 
----
-
-## 🍃 Data Tier Architecture
-
-- **Primary Storage**: MongoDB with Mongoose ODM models:
-  - `User.js`, `Product.js`, `Order.js`, `Poster.js`, `Category.js`, `Coupon.js`, `ProjectKit.js`, `Cart.js`, `Wishlist.js`, `OtpChallenge.js`, `RefreshToken.js`, `AuditLog.js`, `SecurityLog.js`, `Seller.js`.
-- **Relational Export**: `backend/database/supabase_schema.sql` provides relational tables, indexes, triggers, and foreign keys for PostgreSQL / Supabase migration.
-
----
-
-## 🔄 Sequence Diagrams
-
-### 1. Mobile OTP Authentication Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Customer
-    participant Mobile as Mobile App
-    participant Captcha as CaptchaBox Component
-    participant API as Express API Server
-    participant DB as MongoDB
-
-    Customer->>Mobile: Enter Mobile Number (+91 XXXXX XXXXX)
-    Mobile->>Captcha: Present Math/Visual Verification
-    Customer->>Captcha: Complete Captcha Challenge
-    Mobile->>API: POST /api/auth/send-otp { phone, captchaToken }
-    API->>API: Rate Limiter & Cooldown Verification
-    API->>DB: Store Hashed OTP + 5-min TTL Expiry
-    API-->>Mobile: 200 OK (OTP Sent via SMS)
-    Customer->>Mobile: Input 6-Digit OTP
-    Mobile->>API: POST /api/auth/verify-otp { phone, otp }
-    API->>DB: Verify Hashed OTP Match & Expiry
-    API->>DB: Fetch/Create User Record
-    API-->>Mobile: 200 OK { accessToken, refreshToken, user }
-    Mobile->>Mobile: Persist Tokens in Secure Store
+```
+[Admin / Seller Action] 
+       │
+       ▼
+[Express Controller & Zod Validator] 
+       │ (Validates schema, checks roles, sanitizes inputs)
+       ▼
+[Mongoose ODM -> MongoDB Atlas] 
+       │ (Persists document with timestamps, indexes, soft-delete flags)
+       ▼
+[JSON REST Response] 
+       │
+       ├─────────────────────────┬─────────────────────────┐
+       ▼                         ▼                         ▼
+[Admin State Update]     [Website Client]       [Mobile App Store]
 ```
 
----
-
-## 🛡️ Security Isolation Decisions
-
-1. **Admin Portal Isolation**: `POST /api/auth/login` is the sole entry point for administrator sessions. The customer OTP endpoint explicitly blocks privilege escalation to the `admin` role.
-2. **Immutable Audit Trails**: Security-sensitive mutations (role promotion, seller rejection, token revocation) emit logs to `AuditLog` that cannot be edited or erased via API endpoints.
+1. **Product Deletion & Archival**:
+   - Products are safeguarded using soft-delete (`isArchived: true` / `status: 'archived'`).
+   - Active catalog queries (`GET /api/products`) automatically exclude archived products.
+   - Historical orders referencing product IDs retain their linked documents and snapshot data without foreign key corruption.
+2. **Media & Image Storage**:
+   - High-resolution images are uploaded through `POST /api/upload/image` and stored on Cloudinary.
+   - URLs are validated and stored as permanent HTTPS assets in MongoDB product documents.
+   - Image fallback guards are implemented on mobile, website, and admin to prevent blank or broken image renders.

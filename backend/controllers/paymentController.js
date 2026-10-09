@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
+const Product = require('../models/Product');
+const Cart = require('../models/Cart');
 const Payment = require('../models/Payment');
 const WebhookEvent = require('../models/WebhookEvent');
 const AuditLog = require('../models/AuditLog');
@@ -16,8 +18,9 @@ function mongooseValidId(id) {
 
 /**
  * Helper to compute and verify HMAC SHA-256 signature for Webhooks
+ * Supports PayCow standard (timestamp + "." + rawBody), direct rawBody HMAC, and JSON fallback.
  */
-const verifyWebhookSignature = (payload, signature, secret) => {
+const verifyWebhookSignature = (payload, signature, secret, rawBody = null, timestamp = null) => {
   if (!signature || !secret) {
     // In production, an unsigned webhook MUST be rejected
     if (process.env.NODE_ENV === 'production') {
@@ -26,20 +29,119 @@ const verifyWebhookSignature = (payload, signature, secret) => {
     return true;
   }
   try {
-    const rawPayload = typeof payload === 'string' ? payload : JSON.stringify(payload);
-    const computed = crypto.createHmac('sha256', secret).update(rawPayload).digest('hex');
-    const signatureBuffer = Buffer.from(signature.trim());
-    const computedBuffer = Buffer.from(computed.trim());
+    const rawPayload = rawBody
+      ? (Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody))
+      : (typeof payload === 'string' ? payload : JSON.stringify(payload));
 
-    if (signatureBuffer.length !== computedBuffer.length) {
-      return false;
+    const cleanSig = signature.trim().replace(/^v1=/, '');
+
+    // 1. PayCow standard HMAC: timestamp + "." + rawBody
+    if (timestamp) {
+      const paycowComputed = crypto
+        .createHmac('sha256', secret)
+        .update(`${timestamp}.${rawPayload}`)
+        .digest('hex');
+      const sigBuf = Buffer.from(cleanSig);
+      const compBuf = Buffer.from(paycowComputed);
+      if (sigBuf.length === compBuf.length && crypto.timingSafeEqual(compBuf, sigBuf)) {
+        return true;
+      }
     }
-    return crypto.timingSafeEqual(computedBuffer, signatureBuffer);
+
+    // 2. Direct HMAC of raw payload
+    const computedDirect = crypto.createHmac('sha256', secret).update(rawPayload).digest('hex');
+    const sigBuf = Buffer.from(cleanSig);
+    const compDirectBuf = Buffer.from(computedDirect);
+    if (sigBuf.length === compDirectBuf.length && crypto.timingSafeEqual(compDirectBuf, sigBuf)) {
+      return true;
+    }
+
+    // 3. Fallback to JSON.stringify of parsed payload
+    const computedJson = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+    const compJsonBuf = Buffer.from(computedJson);
+    if (sigBuf.length === compJsonBuf.length && crypto.timingSafeEqual(compJsonBuf, sigBuf)) {
+      return true;
+    }
+
+    return false;
   } catch (err) {
     console.error('[Webhook Signature Verification Error]', err);
     return false;
   }
 };
+
+async function finalizePaidOrder(orderRecord, { payment_id, txnId, amount, currency, verificationSource, payload }) {
+  if (!orderRecord) {
+    return { updatedOrder: null, alreadyProcessed: false };
+  }
+
+  if (orderRecord.isPaid) {
+    return { updatedOrder: orderRecord, alreadyProcessed: true };
+  }
+
+  const rollbackEntries = [];
+
+  for (const item of orderRecord.orderItems || []) {
+    if (!item.product || !item.quantity) continue;
+
+    const productId = item.product.toString();
+    const quantity = Number(item.quantity) || 1;
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, stock: { $gte: quantity } },
+      { $inc: { stock: -quantity } },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      for (const rollback of rollbackEntries) {
+        await Product.findByIdAndUpdate(rollback.productId, { $inc: { stock: rollback.quantity } }).catch(() => {});
+      }
+      throw new Error(`Insufficient stock for product ${productId}.`);
+    }
+
+    rollbackEntries.push({ productId, quantity });
+  }
+
+  const updatedOrder = await Order.findOneAndUpdate(
+    { _id: orderRecord._id, isPaid: false },
+    {
+      isPaid: true,
+      paidAt: new Date(),
+      orderStatus: 'Processing',
+      paymentResult: {
+        id: txnId || payment_id,
+        status: 'COMPLETED',
+        updateTime: new Date().toISOString(),
+      },
+    },
+    { new: true }
+  );
+
+  if (updatedOrder) {
+    await Cart.findOneAndUpdate({ user: updatedOrder.user }, { items: [] }).catch(() => {});
+  }
+
+  await Payment.findOneAndUpdate(
+    { order_id: orderRecord.order_id || orderRecord._id.toString() },
+    {
+      payment_id,
+      order_id: orderRecord.order_id || orderRecord._id.toString(),
+      user: orderRecord.user,
+      transaction_id: txnId || undefined,
+      amount: Number(amount || orderRecord.totalPrice || 0),
+      verified_amount: Number(amount || orderRecord.totalPrice || 0),
+      currency: currency || orderRecord.currency || 'INR',
+      status: 'PAID',
+      verification_source: verificationSource || 'webhook',
+      verified_at: new Date(),
+      gateway_response: payload || {},
+    },
+    { upsert: true, new: true }
+  );
+
+  return { updatedOrder, alreadyProcessed: false };
+}
 
 /**
  * 1. Create Payment Order / Payment Intent
@@ -48,7 +150,14 @@ const verifyWebhookSignature = (payload, signature, secret) => {
  */
 const createPaymentOrder = async (req, res) => {
   try {
-    const { order_id, orderId, redirect_url, webhook_url, paymentMethod = 'UPI' } = req.body;
+    const {
+      order_id,
+      orderId,
+      redirect_url,
+      failure_url,
+      webhook_url,
+      paymentMethod = 'UPI',
+    } = req.body;
     const targetOrderId = order_id || orderId;
 
     if (!targetOrderId) {
@@ -126,6 +235,8 @@ const createPaymentOrder = async (req, res) => {
 
     const finalSuccessRedirectUrl =
       redirect_url || `${defaultSuccessRedirect}?order_id=${targetOrderId}&status=paid`;
+    const finalFailedRedirectUrl =
+      failure_url || `${defaultFailedRedirect}?order_id=${targetOrderId}&status=failed`;
     const finalWebhookUrl = webhook_url || globalWebhookUrl;
 
     // 6. Initialize Gateway Intent
@@ -136,12 +247,11 @@ const createPaymentOrder = async (req, res) => {
       customerEmail: req.user?.email || 'customer@techcrate.com',
       customerMobile: orderRecord.shippingAddress?.phone || req.user?.phone || '9876543210',
       redirectUrl: finalSuccessRedirectUrl,
+      failureUrl: finalFailedRedirectUrl,
       webhookUrl: finalWebhookUrl,
     });
 
-    const paymentUrl =
-      autoUpiResponse.paymentUrl ||
-      `https://autoupigateway.com/pay?token=pay_token_${payment_id}&order_id=${targetOrderId}&amount=${amountInRupees}`;
+    const paymentUrl = autoUpiResponse.paymentUrl || null;
 
     // 7. Create or update Payment state machine record in DB
     const paymentRecord = await Payment.findOneAndUpdate(
@@ -159,7 +269,7 @@ const createPaymentOrder = async (req, res) => {
         gateway_response: {
           autoUpi: autoUpiResponse,
           redirect_url: finalSuccessRedirectUrl,
-          failed_redirect_url: defaultFailedRedirect,
+          failed_redirect_url: finalFailedRedirectUrl,
           webhook_url: finalWebhookUrl,
         },
       },
@@ -175,9 +285,12 @@ const createPaymentOrder = async (req, res) => {
       currency: orderRecord.currency || 'INR',
       status: paymentRecord.status,
       payment_url: paymentUrl,
+      is_fallback: autoUpiResponse.isFallback || false,
+      quota_exceeded: autoUpiResponse.quotaExceeded || false,
       upi_intent_url: autoUpiResponse.upiIntentUrl,
       qr_data: autoUpiResponse.qrData,
       redirect_url: finalSuccessRedirectUrl,
+      failed_redirect_url: finalFailedRedirectUrl,
       webhook_url: finalWebhookUrl,
     });
   } catch (error) {
@@ -208,8 +321,34 @@ const getPaymentStatus = async (req, res) => {
     });
     const payment = await Payment.findOne({ order_id }).sort({ created_at: -1 });
 
+    // Handle new session-based checkout flow
     if (!order && !payment) {
-      return res.status(404).json({ success: false, message: 'Order or payment record not found.' });
+      const CheckoutSession = require('../models/CheckoutSession');
+      const session = await CheckoutSession.findOne({
+        $or: [...(validMongoId ? [{ _id: validMongoId }] : []), { payment_id: order_id }],
+      });
+
+      if (session) {
+        if (session.sessionStatus === 'Active') {
+          return res.status(200).json({
+            success: true,
+            status: 'pending',
+            isPaid: false,
+          });
+        }
+        
+        if (session.sessionStatus === 'Completed' && session.order_id) {
+          // If session is completed, we should ideally find the order, but just in case:
+          return res.status(200).json({
+            success: true,
+            status: 'paid',
+            isPaid: true,
+            final_order_id: session.order_id
+          });
+        }
+      }
+
+      return res.status(404).json({ success: false, message: 'Order, payment, or session record not found.' });
     }
 
     // IDOR check: If user is authenticated, ensure they own the order
@@ -238,30 +377,28 @@ const getPaymentStatus = async (req, res) => {
     let status = String(rawStatus).toLowerCase();
 
     // Re-verify with external gateway if not marked as paid yet
-    if (!isPaid && autoUpiService.userToken && autoUpiService.userToken !== 'your_auto_upi_user_token_here') {
-      const autoUpiVerification = await autoUpiService.checkOrderStatus(order_id);
+    const activeGatewayKey = autoUpiService.apiKey || autoUpiService.userToken;
+    if (!isPaid && activeGatewayKey && activeGatewayKey !== 'your_auto_upi_user_token_here') {
+      const gatewayQueryId = payment?.gateway_response?.autoUpi?.gatewayOrderId || order_id;
+      const autoUpiVerification = await autoUpiService.checkOrderStatus(gatewayQueryId);
       if (autoUpiVerification.isPaid) {
-        // Atomic transition to prevent race conditions
-        const updatedOrder = await Order.findOneAndUpdate(
-          { _id: order._id, isPaid: false },
-          { isPaid: true, paidAt: new Date(), orderStatus: 'Processing' },
-          { new: true }
-        );
+        try {
+          const { updatedOrder } = await finalizePaidOrder(order, {
+            payment_id: payment?.payment_id || `PAY_${order_id}`,
+            txnId: autoUpiVerification.gatewayOrderId || order_id,
+            amount: order?.totalPrice || payment?.amount || 0,
+            currency: order?.currency || payment?.currency || 'INR',
+            verificationSource: 'gateway_api',
+            payload: autoUpiVerification.rawResponse || {},
+          });
 
-        if (updatedOrder) {
-          isPaid = true;
-          status = 'paid';
-
-          if (payment) {
-            payment.status = 'PAID';
-            payment.verified_amount = order.totalPrice;
-            payment.verified_at = new Date();
-            payment.verification_source = 'gateway_api';
-            await payment.save();
+          if (updatedOrder) {
+            isPaid = true;
+            status = 'paid';
+            queueService.dispatchOrderProcessing(updatedOrder, req.user || { _id: order.user });
           }
-
-          // Asynchronously trigger fulfillment queue
-          queueService.dispatchOrderProcessing(updatedOrder, req.user || { _id: order.user });
+        } catch (err) {
+          console.error('[Gateway Verification Inventory Error]', err.message);
         }
       }
     }
@@ -276,6 +413,7 @@ const getPaymentStatus = async (req, res) => {
       isPaid,
       verification_source: payment?.verification_source || (isPaid ? 'server_verified' : 'none'),
       updated_at: order?.updatedAt || new Date(),
+      final_order_id: order?.order_id || undefined,
     });
   } catch (error) {
     console.error('[Get Payment Status Error]', error);
@@ -294,35 +432,50 @@ const getPaymentStatus = async (req, res) => {
 const handlePaymentWebhook = async (req, res) => {
   try {
     const signature =
+      req.headers['paycow-signature'] ||
+      req.headers['x-paycow-signature'] ||
       req.headers['x-payment-signature'] ||
       req.headers['x-autoupi-signature'] ||
       req.headers['x-webhook-signature'] ||
-      req.headers['x-razorpay-signature'];
+      req.headers['x-razorpay-signature'] ||
+      req.headers['signature'];
+    const timestamp =
+      req.headers['paycow-timestamp'] ||
+      req.headers['x-paycow-timestamp'] ||
+      req.headers['x-timestamp'] ||
+      req.body?.timestamp;
     const secret =
       process.env.PAYMENT_WEBHOOK_SECRET ||
       process.env.AUTO_UPI_WEBHOOK_SECRET ||
       process.env.WEBHOOK_SECRET;
 
-    // 1. Cryptographic Signature Verification
-    const isValidSignature = verifyWebhookSignature(req.body, signature, secret);
+    // 1. Cryptographic Signature & Token Verification
+    const isValidSignature =
+      verifyWebhookSignature(req.body, signature, secret, req.rawBody, timestamp) ||
+      autoUpiService.verifyWebhook(req.body, req.headers);
+
     if (!isValidSignature) {
       console.warn('[Webhook Invalid Signature] Payload signature verification failed.');
       return res.status(401).json({
         success: false,
-        message: 'Invalid cryptographic webhook signature.',
+        message: 'Invalid cryptographic webhook signature or user token.',
       });
     }
 
     const payload = req.body || {};
+    const data = payload.data || payload.result || payload;
 
     // 2. Timestamp / Freshness Validation — reject stale or replayed events
     const TOLERANCE_SECONDS = Number(process.env.WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) || 300; // 5 minutes
-    const rawTs = payload.timestamp || payload.created_at || payload.event_time || null;
+    const rawTs = timestamp || payload.timestamp || payload.created_at || payload.event_time || null;
     if (rawTs !== null && rawTs !== undefined) {
       let webhookEpochMs;
       if (typeof rawTs === 'number') {
         // Distinguish Unix seconds (10 digits) from Unix milliseconds (13 digits)
         webhookEpochMs = rawTs > 1e12 ? rawTs : rawTs * 1000;
+      } else if (!isNaN(Number(rawTs))) {
+        const numTs = Number(rawTs);
+        webhookEpochMs = numTs > 1e12 ? numTs : numTs * 1000;
       } else {
         // ISO-8601 or other parseable date string
         webhookEpochMs = new Date(rawTs).getTime();
@@ -355,13 +508,13 @@ const handlePaymentWebhook = async (req, res) => {
       console.warn('[Webhook No Timestamp] Payload contains no timestamp field. Freshness cannot be verified.');
     }
 
-    const event_type = payload.event || payload.event_type || payload.status || 'payment.paid';
-    const txnId = payload.txnId || payload.txnid || payload.transaction_id || payload.utr;
-    const payment_id = payload.payment_id || txnId || `PAY_${payload.order_id || Date.now()}`;
-    const order_id = payload.order_id || payload.orderId;
-    const amount = Number(payload.amount || payload.totalPrice || 0);
-    const currency = payload.currency || 'INR';
-    const rawStatus = (payload.status || '').toLowerCase();
+    const event_type = payload.event || payload.event_type || data.status || payload.status || 'payment.paid';
+    const txnId = data.txnId || data.txnid || data.transaction_id || data.utr || payload.txnId || payload.txnid || payload.transaction_id || payload.utr;
+    const payment_id = data.payment_id || payload.payment_id || txnId || `PAY_${data.order_id || payload.order_id || Date.now()}`;
+    const order_id = data.order_id || data.orderId || payload.order_id || payload.orderId;
+    const amount = Number(data.amount || data.totalPrice || payload.amount || payload.totalPrice || 0);
+    const currency = data.currency || payload.currency || 'INR';
+    const rawStatus = (data.status || payload.status || '').toLowerCase();
 
     if (!order_id) {
       return res.status(400).json({ success: false, message: 'Missing order_id in webhook payload.' });
@@ -402,13 +555,78 @@ const handlePaymentWebhook = async (req, res) => {
 
     if (isPaidEvent) {
       const validMongoId = mongooseValidId(order_id);
-      const orderRecord = await Order.findOne({
-        $or: [...(validMongoId ? [{ _id: validMongoId }] : []), { order_id }],
+      
+      const CheckoutSession = require('../models/CheckoutSession');
+      let session = await CheckoutSession.findOne({
+          $or: [...(validMongoId ? [{ _id: validMongoId }] : []), { payment_id: order_id }],
       });
+      
+      let orderRecord = null;
+      let isCheckoutSessionFlow = false;
+      let updatedOrder = null;
+
+      if (session && session.sessionStatus === 'Active') {
+          isCheckoutSessionFlow = true;
+          // Create the Order from session
+          const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          const randomHex = require('crypto').randomBytes(2).toString('hex').toUpperCase();
+          const newOrderId = `ORD-${dateStr}-${randomHex}`;
+          
+          orderRecord = new Order({
+              order_id: newOrderId,
+              user: session.user,
+              orderItems: session.orderItems,
+              shippingAddress: session.shippingAddress,
+              paymentMethod: session.paymentMethod,
+              itemsPrice: session.itemsPrice,
+              taxPrice: session.taxPrice,
+              shippingPrice: session.shippingPrice,
+              totalPrice: session.totalPrice,
+              isPaid: true,
+              paidAt: new Date(),
+              orderStatus: 'Processing',
+              paymentResult: {
+                  id: txnId || payment_id,
+                  status: 'COMPLETED',
+                  updateTime: new Date().toISOString()
+              }
+          });
+          
+          updatedOrder = await orderRecord.save();
+          
+          // Mark session completed
+          session.sessionStatus = 'Completed';
+          session.order_id = updatedOrder.order_id;
+          await session.save();
+          
+          // Clear cart
+          await Cart.findOneAndUpdate({ user: orderRecord.user }, { items: [] }).catch(() => {});
+          
+      } else {
+        orderRecord = await Order.findOne({
+          $or: [...(validMongoId ? [{ _id: validMongoId }] : []), { order_id }],
+        });
+
+        // Fallback: If webhook order_id is the AutoUPI Gateway ID (e.g. ORD...) or slug
+        if (!orderRecord) {
+          const matchingPayment = await Payment.findOne({
+            $or: [
+              { 'gateway_response.autoUpi.gatewayOrderId': order_id },
+              { 'gateway_response.autoUpi.slug': payload.slug || order_id },
+            ],
+          });
+          if (matchingPayment) {
+            const mappedValidId = mongooseValidId(matchingPayment.order_id);
+            orderRecord = await Order.findOne({
+              $or: [...(mappedValidId ? [{ _id: mappedValidId }] : []), { order_id: matchingPayment.order_id }],
+            });
+          }
+        }
+      }
 
       if (!orderRecord) {
-        console.warn(`[Webhook Error] Order ${order_id} not found in database.`);
-        return res.status(404).json({ success: false, message: 'Referenced order not found.' });
+        console.warn(`[Webhook Error] Order/Session ${order_id} not found in database.`);
+        return res.status(404).json({ success: false, message: 'Referenced order or session not found.' });
       }
 
       // 3. Amount Validation (Protection against amount tampering)
@@ -426,7 +644,7 @@ const handlePaymentWebhook = async (req, res) => {
       if (txnId) {
         const duplicatePayment = await Payment.findOne({
           transaction_id: txnId,
-          order_id: { $ne: order_id },
+          order_id: { $ne: isCheckoutSessionFlow ? orderRecord.order_id : order_id },
           status: { $in: ['PAID', 'paid'] },
         });
 
@@ -441,24 +659,26 @@ const handlePaymentWebhook = async (req, res) => {
         }
       }
 
-      // 5. Atomic Order State Transition (PAID -> Processing)
-      const updatedOrder = await Order.findOneAndUpdate(
-        {
-          $or: [...(validMongoId ? [{ _id: validMongoId }] : []), { order_id }],
-          isPaid: false,
-        },
-        {
-          isPaid: true,
-          paidAt: new Date(),
-          orderStatus: 'Processing',
-          paymentResult: {
-            id: txnId || payment_id,
-            status: 'COMPLETED',
-            updateTime: new Date().toISOString(),
+      // 5. Atomic Order State Transition (PAID -> Processing) - ONLY if legacy flow
+      if (!isCheckoutSessionFlow) {
+        updatedOrder = await Order.findOneAndUpdate(
+          {
+            $or: [...(validMongoId ? [{ _id: validMongoId }] : []), { order_id }],
+            isPaid: false,
           },
-        },
-        { new: true }
-      );
+          {
+            isPaid: true,
+            paidAt: new Date(),
+            orderStatus: 'Processing',
+            paymentResult: {
+              id: txnId || payment_id,
+              status: 'COMPLETED',
+              updateTime: new Date().toISOString(),
+            },
+          },
+          { new: true }
+        );
+      }
 
       // 6. Update or Create Payment Model
       await Payment.findOneAndUpdate(
@@ -677,10 +897,141 @@ const getPaymentHistory = async (req, res) => {
   }
 };
 
+/**
+ * XSS escaping helper for server-rendered HTML
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * 6. Payment Success Redirect Landing Page
+ * GET /payment-success & GET /api/payments/payment-success
+ */
+const renderPaymentSuccessPage = (req, res) => {
+  const orderId = req.query.order_id || req.query.orderId || '';
+  const status = req.query.status || 'paid';
+  const deepLink = `techcrate://payment/success?order_id=${encodeURIComponent(orderId)}&status=${encodeURIComponent(status)}`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Successful — TechCrate</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background: #0b0f19; color: #f3f4f6; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 20px; padding: 40px 32px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+    .icon-wrapper { width: 80px; height: 80px; background: rgba(16, 185, 129, 0.12); border: 2px solid #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; color: #10b981; font-size: 38px; }
+    h1 { font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 8px; }
+    p.desc { font-size: 14px; color: #9ca3af; margin-bottom: 24px; line-height: 1.5; }
+    .detail-box { background: #1a2234; border: 1px solid #2d3748; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: left; }
+    .detail-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
+    .detail-row:last-child { margin-bottom: 0; }
+    .label { color: #9ca3af; }
+    .value { color: #f3f4f6; font-weight: 600; font-family: monospace; }
+    .badge-paid { color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 8px; border-radius: 6px; font-weight: 700; }
+    .btn { display: block; width: 100%; padding: 14px; border-radius: 10px; font-weight: 600; font-size: 15px; text-decoration: none; cursor: pointer; transition: all 0.2s; border: none; }
+    .btn-primary { background: #3b82f6; color: #ffffff; margin-bottom: 12px; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-secondary { background: transparent; color: #9ca3af; border: 1px solid #374151; }
+    .btn-secondary:hover { color: #ffffff; border-color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrapper">✓</div>
+    <h1>Payment Successful!</h1>
+    <p class="desc">Thank you! Your payment has been received and confirmed by TechCrate.</p>
+    <div class="detail-box">
+      ${orderId ? `<div class="detail-row"><span class="label">Order ID:</span><span class="value">${escapeHtml(orderId)}</span></div>` : ''}
+      <div class="detail-row"><span class="label">Status:</span><span class="badge-paid">PAID</span></div>
+    </div>
+    <a href="${deepLink}" class="btn btn-primary">Open TechCrate App</a>
+    <a href="https://tech-crate-tau.vercel.app" class="btn btn-secondary">Go to TechCrate Web</a>
+  </div>
+  <script>
+    if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
+      setTimeout(function() { window.location.href = "${deepLink}"; }, 1200);
+    }
+  </script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html');
+  return res.send(html);
+};
+
+/**
+ * 7. Payment Failed / Cancelled Redirect Landing Page
+ * GET /payment-failed & GET /api/payments/payment-failed
+ */
+const renderPaymentFailedPage = (req, res) => {
+  const orderId = req.query.order_id || req.query.orderId || '';
+  const status = req.query.status || 'failed';
+  const deepLink = `techcrate://payment/failed?order_id=${encodeURIComponent(orderId)}&status=${encodeURIComponent(status)}`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Incomplete — TechCrate</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background: #0b0f19; color: #f3f4f6; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 20px; padding: 40px 32px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+    .icon-wrapper { width: 80px; height: 80px; background: rgba(239, 68, 68, 0.12); border: 2px solid #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; color: #ef4444; font-size: 38px; }
+    h1 { font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 8px; }
+    p.desc { font-size: 14px; color: #9ca3af; margin-bottom: 24px; line-height: 1.5; }
+    .detail-box { background: #1a2234; border: 1px solid #2d3748; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: left; }
+    .detail-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
+    .detail-row:last-child { margin-bottom: 0; }
+    .label { color: #9ca3af; }
+    .value { color: #f3f4f6; font-weight: 600; font-family: monospace; }
+    .badge-failed { color: #ef4444; background: rgba(239, 68, 68, 0.15); padding: 2px 8px; border-radius: 6px; font-weight: 700; }
+    .btn { display: block; width: 100%; padding: 14px; border-radius: 10px; font-weight: 600; font-size: 15px; text-decoration: none; cursor: pointer; transition: all 0.2s; border: none; }
+    .btn-primary { background: #ef4444; color: #ffffff; margin-bottom: 12px; }
+    .btn-primary:hover { background: #dc2626; }
+    .btn-secondary { background: transparent; color: #9ca3af; border: 1px solid #374151; }
+    .btn-secondary:hover { color: #ffffff; border-color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrapper">✕</div>
+    <h1>Payment Cancelled or Failed</h1>
+    <p class="desc">The transaction was cancelled or could not be completed. You can try again from the app.</p>
+    <div class="detail-box">
+      ${orderId ? `<div class="detail-row"><span class="label">Order ID:</span><span class="value">${escapeHtml(orderId)}</span></div>` : ''}
+      <div class="detail-row"><span class="label">Status:</span><span class="badge-failed">${escapeHtml(status.toUpperCase())}</span></div>
+    </div>
+    <a href="${deepLink}" class="btn btn-primary">Return to TechCrate App</a>
+    <a href="https://tech-crate-tau.vercel.app" class="btn btn-secondary">Go to TechCrate Web</a>
+  </div>
+  <script>
+    if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
+      setTimeout(function() { window.location.href = "${deepLink}"; }, 1200);
+    }
+  </script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html');
+  return res.send(html);
+};
+
 module.exports = {
   createPaymentOrder,
   getPaymentStatus,
   handlePaymentWebhook,
   reconcilePaymentManual,
   getPaymentHistory,
+  renderPaymentSuccessPage,
+  renderPaymentFailedPage,
 };

@@ -1,9 +1,14 @@
 import {apiGet, apiPost, apiPut} from './api';
 
 const orderService = {
-  // Create order
+  // Create order (legacy)
   createOrder: async orderData => {
     return await apiPost('/orders', orderData);
+  },
+
+  // Initiate checkout session
+  initiateCheckout: async checkoutData => {
+    return await apiPost('/checkout/initiate', checkoutData);
   },
 
   // Get all orders

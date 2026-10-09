@@ -16,8 +16,11 @@ sequenceDiagram
     participant API as Express Backend API
     participant AutoUPI as Auto UPI Gateway (autoupigateway.com)
 
-    User->>Mobile: Select UPI Payment & Click Checkout
-    Mobile->>API: POST /api/payments/create-order { amount, orderId }
+    User->>Mobile: Review cart and submit checkout
+    Mobile->>API: POST /api/orders { items, shippingAddress, paymentMethod }
+    API-->>Mobile: Pending order details page { orderId, total, status: Pending }
+    User->>Mobile: Tap Pay Now on order details
+    Mobile->>API: POST /api/payments/create-order { orderId }
     API->>AutoUPI: POST https://autoupigateway.com/api/create-order { user_token, amount, order_id }
     AutoUPI-->>API: { status: true, payment_url, upi_intent_url, qr_code }
     API-->>Mobile: { success: true, paymentUrl, upiIntentUrl, qrData, orderId }

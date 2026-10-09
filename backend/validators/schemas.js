@@ -36,17 +36,22 @@ const otpVerifySchema = z.object({
 // 2. Product Schemas
 // ==========================================
 const createProductSchema = z.object({
-  title: z.string().min(3, 'Product title must be at least 3 characters'),
-  description: z.string().min(10, 'Description must be at least 10 characters'),
-  price: z.number().positive('Price must be greater than zero'),
-  originalPrice: z.number().positive().optional(),
+  title: z.string().min(2, 'Product title must be at least 2 characters'),
+  description: z.string().min(5, 'Description must be at least 5 characters'),
+  price: z.number().nonnegative('Price cannot be negative'),
+  originalPrice: z.number().nonnegative().optional(),
+  discountedPrice: z.number().nonnegative().optional(),
+  discountPercentage: z.number().min(0).max(100).optional(),
   stock: z.number().int().nonnegative('Stock cannot be negative'),
   category: z.string().min(1, 'Category is required'),
-  sku: z.string().min(3, 'Valid SKU is required').optional(),
-  images: z.array(z.string().url('Invalid image URL')).min(1, 'At least one image is required'),
+  sku: z.string().optional(),
+  images: z.array(z.string().min(1, 'Image string cannot be empty')).min(1, 'At least one image is required'),
   features: z.array(z.string()).optional(),
   specifications: z.record(z.string(), z.any()).optional(),
-  datasheetUrl: z.string().url('Invalid datasheet URL').optional().or(z.literal('')),
+  datasheetUrl: z.string().optional(),
+  isArchived: z.boolean().optional(),
+  status: z.enum(['active', 'archived', 'draft']).optional(),
+  isFeatured: z.boolean().optional(),
 });
 
 const updateProductSchema = createProductSchema.partial();
@@ -70,18 +75,22 @@ const updateCartItemSchema = z.object({
 const createOrderSchema = z.object({
   orderItems: z.array(
     z.object({
-      product: z.string().min(1, 'Product ID is required'),
+      product: z.string().optional(),
+      projectKit: z.string().optional(),
+      title: z.string().optional(),
+      image: z.string().optional(),
+      itemType: z.string().optional(),
       quantity: z.number().int().positive('Quantity must be at least 1'),
       price: z.number().optional(), // Server overrides client price
     })
   ).min(1, 'Order must contain at least one item'),
   shippingAddress: z.object({
     fullName: z.string().min(2, 'Recipient full name is required'),
-    phone: z.string().min(10, 'Valid contact phone required'),
+    phone: z.string().transform((val) => String(val || '').replace(/[\s\-]/g, '')).pipe(z.string().min(10, 'Valid contact phone required')),
     street: z.string().min(3, 'Street address is required'),
     city: z.string().min(2, 'City is required'),
-    state: z.string().min(2, 'State is required'),
-    pincode: z.string().regex(/^[0-9]{6}$/, 'Pincode must be exactly 6 digits'),
+    state: z.string().optional().default('Maharashtra').transform((val) => (val && val.trim().length >= 2 ? val.trim() : 'Maharashtra')),
+    pincode: z.string().transform((val) => String(val || '').replace(/\D/g, '')).pipe(z.string().regex(/^[0-9]{6}$/, 'Pincode must be exactly 6 digits')),
     country: z.string().default('India'),
   }),
   paymentMethod: z.enum(['UPI', 'Card', 'NetBanking', 'Razorpay', 'Cash on Delivery', 'COD']),
