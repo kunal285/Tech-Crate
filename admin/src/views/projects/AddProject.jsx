@@ -2,11 +2,18 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Cpu, Save } from 'lucide-react';
 import { projectService } from '../../services/projectService';
+import PageHeader from '../../components/PageHeader';
+import { Card } from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Textarea from '../../components/ui/Textarea';
 
 export default function AddProject() {
   const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     subtitle: '',
@@ -19,6 +26,7 @@ export default function AddProject() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       await projectService.createProject({
         ...formData,
@@ -26,73 +34,108 @@ export default function AddProject() {
       });
       router.push('/projects');
     } catch (err) {
-      alert(err.message);
+      alert(err.response?.data?.message || err.message || 'Failed to create project');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-8 space-y-6 max-w-2xl">
-      <button onClick={() => router.push('/projects')} className="flex items-center gap-2 text-sm text-cyan-400 font-semibold hover:underline">
-        <ArrowLeft className="w-4 h-4" /> Back to Projects
-      </button>
+    <div className="max-w-3xl space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="Create Engineering Project"
+        subtitle="Publish a guided DIY tutorial, pinout diagram, and firmware snippet for makers"
+        breadcrumbs={[{ label: 'Catalog', href: '/projects' }, { label: 'New Project' }]}
+        action={
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => router.push('/projects')}
+            icon={ArrowLeft}
+          >
+            Back to Projects
+          </Button>
+        }
+      />
 
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Create Engineering Project</h1>
-      </div>
-
-      <form onSubmit={handleSubmit} className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
-        <div>
-          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Project Title</label>
-          <input
-            type="text"
+      <Card className="p-6 sm:p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            label="Project Title *"
             required
-            placeholder="Smart IoT Plant Watering System"
+            placeholder="e.g. Smart IoT Plant Watering System"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white"
           />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Category</label>
-            <select
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Select
+              label="Category"
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white"
-            >
-              <option value="IoT">IoT</option>
-              <option value="Robotics">Robotics</option>
-              <option value="Embedded Systems">Embedded Systems</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Kit Price (₹)</label>
-            <input
+              options={[
+                { label: 'IoT & Connected Devices', value: 'IoT' },
+                { label: 'Robotics & Automation', value: 'Robotics' },
+                { label: 'Embedded Systems', value: 'Embedded' },
+                { label: 'Sensors & Instrumentation', value: 'Sensors' },
+              ]}
+            />
+            <Select
+              label="Difficulty Level"
+              value={formData.difficulty}
+              onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
+              options={[
+                { label: 'Beginner', value: 'Beginner' },
+                { label: 'Intermediate', value: 'Intermediate' },
+                { label: 'Advanced', value: 'Advanced' },
+              ]}
+            />
+            <Input
+              label="Kit Price (₹) *"
               type="number"
+              min="0"
               required
-              placeholder="1299"
+              placeholder="e.g. 1299"
               value={formData.price}
               onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white"
             />
           </div>
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">C++ Firmware Code</label>
-          <textarea
+
+          <Textarea
+            label="Project Overview & BOM Description *"
             rows={4}
-            value={formData.codeSnippet}
-            onChange={(e) => setFormData({ ...formData, codeSnippet: e.target.value })}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs font-mono text-cyan-300"
+            required
+            placeholder="Explain the circuit design, core microcontrollers used, and assembly instructions."
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           />
-        </div>
-        <button
-          type="submit"
-          className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20"
-        >
-          <Plus className="w-4 h-4" /> Publish Project Kit
-        </button>
-      </form>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+              Firmware Code Snippet (C++ / MicroPython)
+            </label>
+            <textarea
+              rows={5}
+              value={formData.codeSnippet}
+              onChange={(e) => setFormData({ ...formData, codeSnippet: e.target.value })}
+              className="w-full px-4 py-3 text-xs font-mono bg-slate-900 text-slate-100 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
+            />
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              loading={isSubmitting}
+              icon={Save}
+            >
+              Publish Engineering Project
+            </Button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }

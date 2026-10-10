@@ -9,7 +9,9 @@
     "dev": "nodemon server.js",
     "seed": "node scripts/seed.js",
     "test": "node scripts/test_amazon_flipkart_checkout_workflow.js",
-    "test:checkout": "node scripts/test_amazon_flipkart_checkout_workflow.js"
+    "test:checkout": "node scripts/test_amazon_flipkart_checkout_workflow.js",
+    "test:jest": "jest --forceExit",
+    "test:all": "node scripts/test_amazon_flipkart_checkout_workflow.js && jest --forceExit"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

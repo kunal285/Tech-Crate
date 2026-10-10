@@ -21,6 +21,7 @@ export default function Providers({ children }) {
 
   useEffect(() => {
     setMounted(true);
+    useAuthStore.getState().initAuth?.();
   }, []);
 
   return (

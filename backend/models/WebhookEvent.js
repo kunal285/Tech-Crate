@@ -10,7 +10,7 @@ const webhookEventSchema = new mongoose.Schema(
     },
     event_type: {
       type: String,
-      required: true,
+      default: 'payment.captured',
     },
     payment_id: {
       type: String,

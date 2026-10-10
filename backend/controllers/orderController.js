@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const ProjectKit = require('../models/ProjectKit');
 const Coupon = require('../models/Coupon');
 const Cart = require('../models/Cart');
+const { calculateOrderTotals } = require('../utils/money');
 
 // @desc Create new order with server-enforced pricing, coupon validation & atomic inventory deduction
 // @route POST /api/orders
@@ -108,11 +109,17 @@ const createOrder = async (req, res) => {
       }
     }
 
-    // 3. Tax and Shipping calculations
-    const discountedSubtotal = Math.max(0, itemsPrice - discountAmount);
-    const shippingPrice = discountedSubtotal >= 999 || discountedSubtotal === 0 ? 0 : 70;
-    const taxPrice = Math.round(discountedSubtotal * 0.18); // 18% standard GST
-    const totalPrice = discountedSubtotal + shippingPrice + taxPrice;
+    // 3. Tax and Shipping calculations (authoritative INR & Paise)
+    const totals = calculateOrderTotals({ itemsPrice, discountAmount });
+    const {
+      shippingPrice,
+      taxPrice,
+      totalPrice,
+      itemsPricePaise,
+      taxPricePaise,
+      shippingPricePaise,
+      totalPricePaise,
+    } = totals;
 
     // 4. Create the verified order
     const order = new Order({
@@ -132,6 +139,10 @@ const createOrder = async (req, res) => {
       taxPrice,
       shippingPrice,
       totalPrice,
+      itemsPricePaise,
+      taxPricePaise,
+      shippingPricePaise,
+      totalPricePaise,
       isPaid: false, // Must be verified by backend before transitioning to true
       paidAt: null,
       orderStatus: paymentMethod === 'COD' ? 'Processing' : 'Pending',

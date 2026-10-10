@@ -2,63 +2,146 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Cpu, Plus, Code, Layers } from 'lucide-react';
+import { Cpu, Plus, Code, Layers, RefreshCw, ArrowRight } from 'lucide-react';
 import { projectService } from '../../services/projectService';
+import PageHeader from '../../components/PageHeader';
+import { Card } from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
 
 export default function Projects() {
   const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      const data = await projectService.getProjects();
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadProjects();
   }, []);
 
-  const loadProjects = async () => {
-    try {
-      const data = await projectService.getProjects();
-      setProjects(data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Engineering Project Hub</h1>
-          <p className="text-sm text-slate-400">Manage turn-key DIY electronics kits, schematic diagrams, and C++ source code</p>
-        </div>
-        <button
-          onClick={() => router.push('/projects/create')}
-          className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm rounded-xl flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> Create New Engineering Project
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {projects.map((p) => (
-          <div key={p._id} className="bg-slate-950 border border-slate-800 rounded-2xl p-6 space-y-3 shadow-xl">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  {p.category} • {p.difficulty}
-                </span>
-                <h2 className="text-xl font-bold text-white mt-2">{p.title}</h2>
-              </div>
-              <span className="text-lg font-bold text-emerald-400">₹{p.price}</span>
-            </div>
-            <p className="text-xs text-slate-400 line-clamp-2">{p.description}</p>
-            <button
-              onClick={() => router.push(`/projects/${p._id}`)}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl"
+    <div className="space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="Engineering Project Hub"
+        subtitle="Manage turn-key DIY electronics project kits, schematic diagrams, code repositories, and bill-of-materials"
+        breadcrumbs={[{ label: 'Catalog' }, { label: 'Projects' }]}
+        action={
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={loadProjects}
+              loading={loading}
+              icon={RefreshCw}
             >
-              View Full Schematic & BOM Details →
-            </button>
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => router.push('/projects/create')}
+              icon={Plus}
+            >
+              Create Project
+            </Button>
           </div>
-        ))}
-      </div>
+        }
+      />
+
+      {/* Projects Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="p-6 animate-pulse space-y-3">
+              <div className="flex justify-between">
+                <div className="w-32 h-5 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                <div className="w-16 h-5 bg-slate-200 dark:bg-slate-800 rounded" />
+              </div>
+              <div className="w-48 h-6 bg-slate-200 dark:bg-slate-800 rounded" />
+              <div className="w-full h-4 bg-slate-200 dark:bg-slate-800 rounded" />
+            </Card>
+          ))}
+        </div>
+      ) : projects.length === 0 ? (
+        <Card className="p-12 text-center">
+          <EmptyState
+            icon={Cpu}
+            title="No engineering projects yet"
+            description="Create your first DIY project kit with pinouts, circuit diagram, and BOM component list."
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => router.push('/projects/create')}
+                icon={Plus}
+              >
+                Create First Project
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {projects.map((p) => (
+            <Card
+              key={p._id}
+              className="p-6 space-y-4 hover:border-brand-primary/40 dark:hover:border-blue-500/40 transition-colors flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="primary" size="sm">
+                      {p.category || 'Engineering'}
+                    </Badge>
+                    {p.difficulty && (
+                      <Badge variant="neutral" size="sm">
+                        {p.difficulty}
+                      </Badge>
+                    )}
+                  </div>
+                  {p.price && (
+                    <span className="text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                      ₹{Number(p.price).toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                    {p.title}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-relaxed">
+                    {p.description || 'Turnkey hardware DIY kit with comprehensive BOM components.'}
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => router.push(`/projects/${p._id}`)}
+                className="w-full justify-center gap-1.5"
+              >
+                <span>View Full Schematic & BOM Details</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

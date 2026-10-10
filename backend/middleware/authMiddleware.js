@@ -13,54 +13,64 @@ const getJwtSecret = () => {
   return secret;
 };
 
-const protect = async (req, res, next) => {
-  let token;
-
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, getJwtSecret());
-
-      req.user = await User.findById(decoded.id).select('-password');
-
-      if (!req.user) {
-        if (typeof res.error === 'function') {
-          return res.error('USER_NOT_FOUND', 'Not authorized: User account no longer exists.', 401);
-        }
-        return res.status(401).json({ message: 'Not authorized: User account no longer exists.' });
-      }
-
-      // Check if account is locked or deactivated
-      if (req.user.isLocked) {
-        if (typeof res.error === 'function') {
-          return res.error('ACCOUNT_LOCKED', 'Account is temporarily locked. Please contact support.', 423);
-        }
-        return res.status(423).json({ message: 'Account is temporarily locked. Please contact support.' });
-      }
-
-      return next();
-    } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        if (typeof res.error === 'function') {
-          return res.error('TOKEN_EXPIRED', 'Session expired. Please log in again.', 401);
-        }
-        return res.status(401).json({ message: 'Session expired. Please log in again.', expired: true });
-      }
-      if (typeof res.error === 'function') {
-        return res.error('INVALID_TOKEN', 'Not authorized: Invalid authentication token.', 401);
-      }
-      return res.status(401).json({ message: 'Not authorized: Invalid authentication token.' });
+const extractAuthToken = (req) => {
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    return req.headers.authorization.split(' ')[1];
+  }
+  if (req.cookies && (req.cookies.token || req.cookies.auth_token)) {
+    return req.cookies.token || req.cookies.auth_token;
+  }
+  if (req.headers.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)(?:token|auth_token)=([^;]+)/);
+    if (match) {
+      return decodeURIComponent(match[1]);
     }
   }
+  return null;
+};
+
+const protect = async (req, res, next) => {
+  const token = extractAuthToken(req);
 
   if (!token) {
     if (typeof res.error === 'function') {
       return res.error('UNAUTHORIZED', 'Not authorized: No authentication token provided.', 401);
     }
     return res.status(401).json({ message: 'Not authorized: No token provided.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, getJwtSecret());
+
+    req.user = await User.findById(decoded.id).select('-password');
+
+    if (!req.user) {
+      if (typeof res.error === 'function') {
+        return res.error('USER_NOT_FOUND', 'Not authorized: User account no longer exists.', 401);
+      }
+      return res.status(401).json({ message: 'Not authorized: User account no longer exists.' });
+    }
+
+    // Check if account is locked or deactivated
+    if (req.user.isLocked) {
+      if (typeof res.error === 'function') {
+        return res.error('ACCOUNT_LOCKED', 'Account is temporarily locked. Please contact support.', 423);
+      }
+      return res.status(423).json({ message: 'Account is temporarily locked. Please contact support.' });
+    }
+
+    return next();
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      if (typeof res.error === 'function') {
+        return res.error('TOKEN_EXPIRED', 'Session expired. Please log in again.', 401);
+      }
+      return res.status(401).json({ message: 'Session expired. Please log in again.', expired: true });
+    }
+    if (typeof res.error === 'function') {
+      return res.error('INVALID_TOKEN', 'Not authorized: Invalid authentication token.', 401);
+    }
+    return res.status(401).json({ message: 'Not authorized: Invalid authentication token.' });
   }
 };
 
@@ -93,12 +103,9 @@ const authorizeRoles = (...roles) => {
 };
 
 const optionalProtect = async (req, res, next) => {
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
+  const token = extractAuthToken(req);
+  if (token) {
     try {
-      const token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, getJwtSecret());
       req.user = await User.findById(decoded.id).select('-password');
     } catch {

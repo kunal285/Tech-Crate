@@ -82,17 +82,25 @@ class RazorpayService {
    * Signature = HMAC-SHA256(razorpay_order_id + "|" + razorpay_payment_id, key_secret)
    */
   verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature }) {
-    if (!this.keySecret) {
+    const secret = this.keySecret || process.env.RAZORPAY_KEY_SECRET || '';
+    if (!secret) {
       console.warn('[Razorpay] Key secret not configured — skipping signature verification.');
       return process.env.NODE_ENV !== 'production';
     }
+    if (!razorpay_signature) return false;
+
     try {
       const body = `${razorpay_order_id}|${razorpay_payment_id}`;
       const expected = crypto
-        .createHmac('sha256', this.keySecret)
+        .createHmac('sha256', secret)
         .update(body)
         .digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpay_signature || ''));
+      const expectedBuf = Buffer.from(expected);
+      const signatureBuf = Buffer.from(razorpay_signature || '');
+      if (expectedBuf.length !== signatureBuf.length) {
+        return false;
+      }
+      return crypto.timingSafeEqual(expectedBuf, signatureBuf);
     } catch {
       return false;
     }
@@ -104,19 +112,25 @@ class RazorpayService {
    * Signature = HMAC-SHA256(rawBody, webhook_secret)
    */
   verifyWebhookSignature(rawBody, signature) {
-    if (!this.webhookSecret) {
+    const secret = this.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || '';
+    if (!secret) {
       console.warn('[Razorpay Webhook] RAZORPAY_WEBHOOK_SECRET not set.');
       return process.env.NODE_ENV !== 'production';
     }
-    if (!signature) return process.env.NODE_ENV !== 'production';
+    if (!signature) return false;
 
     try {
       const body = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody);
       const expected = crypto
-        .createHmac('sha256', this.webhookSecret)
+        .createHmac('sha256', secret)
         .update(body)
         .digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+      const expectedBuf = Buffer.from(expected);
+      const signatureBuf = Buffer.from(signature);
+      if (expectedBuf.length !== signatureBuf.length) {
+        return false;
+      }
+      return crypto.timingSafeEqual(expectedBuf, signatureBuf);
     } catch {
       return false;
     }

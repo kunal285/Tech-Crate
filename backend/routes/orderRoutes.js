@@ -12,9 +12,10 @@ const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const { checkoutLimiter } = require('../middleware/rateLimiter');
 const { validate } = require('../middleware/zodValidation');
 const { createOrderSchema, updateOrderStatusSchema } = require('../validators/schemas');
+const idempotencyGuard = require('../middleware/idempotencyMiddleware');
 
 router.route('/')
-  .post(protect, checkoutLimiter, validate(createOrderSchema), createOrder)
+  .post(protect, checkoutLimiter, idempotencyGuard, validate(createOrderSchema), createOrder)
   .get(protect, authorizeRoles('admin'), getAllOrders);
 
 router.get('/myorders', protect, getMyOrders);

@@ -1,24 +1,29 @@
 import { create } from 'zustand';
 
-const isClient = typeof window !== 'undefined';
-
-const getInitialUser = () => {
-  if (!isClient) return null;
-  try {
-    const stored = localStorage.getItem('adminUser');
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
-  }
-};
-
 export const useAuthStore = create((set, get) => ({
-  user: getInitialUser(),
-  admin: getInitialUser(),
-  isAuthenticated: isClient ? !!localStorage.getItem('adminUser') : false,
+  user: null,
+  admin: null,
+  isAuthenticated: false,
   loading: false,
   error: null,
   require2FA: false,
+
+  initAuth: () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem('adminUser');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        set({
+          user: parsed,
+          admin: parsed,
+          isAuthenticated: true,
+        });
+      }
+    } catch {
+      // silent fallback
+    }
+  },
 
   login: async (email, password, { totpCode, recoveryCode } = {}) => {
     set({ loading: true, error: null });

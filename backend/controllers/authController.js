@@ -338,6 +338,15 @@ const loginUser = async (req, res) => {
       twoFactorEnabled: user.twoFactorEnabled,
     };
 
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie('token', accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
     res.json({
       ...userPayload,
       user: userPayload,
@@ -535,6 +544,9 @@ const logoutUser = async (req, res) => {
       await RefreshToken.updateMany({ user: userId }, { isRevoked: true });
       await logSecurityEvent(userId, 'SESSION_REVOKED', req);
     }
+
+    res.clearCookie('token', { path: '/' });
+    res.clearCookie('auth_token', { path: '/' });
 
     res.json({ success: true, message: 'Logged out successfully. Session invalidated.' });
   } catch (error) {

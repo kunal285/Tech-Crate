@@ -31,6 +31,7 @@ export const ROLE_ROUTE_PERMISSIONS = {
     '/analytics',
     '/settings',
     '/replacements',
+    '/ui-kit',
   ],
   admin: [
     // Legacy string equivalent to super_admin
@@ -51,6 +52,7 @@ export const ROLE_ROUTE_PERMISSIONS = {
     '/analytics',
     '/settings',
     '/replacements',
+    '/ui-kit',
   ],
   store_manager: [
     '/',

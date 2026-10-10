@@ -12,14 +12,21 @@ import {
   AlertTriangle,
   XCircle,
   RefreshCw,
-  SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
   AlertOctagon,
   RotateCcw,
   Archive,
+  Boxes,
+  Layers,
 } from 'lucide-react';
 import api from '../services/api';
+import PageHeader from '../components/PageHeader';
+import { Card, StatCard } from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Modal } from '../components/ui/Modal';
+import EmptyState from '../components/ui/EmptyState';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -54,6 +61,15 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  // Summary Metrics
+  const metrics = useMemo(() => {
+    const total = products.length;
+    const active = products.filter((p) => !p.isArchived).length;
+    const lowStock = products.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) <= 10).length;
+    const outOfStock = products.filter((p) => (p.stock || 0) <= 0).length;
+    return { total, active, lowStock, outOfStock };
+  }, [products]);
 
   // Unique categories for filter dropdown
   const categories = useMemo(() => {
@@ -152,187 +168,257 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Component Catalog & Stock</h1>
-          <p className="text-sm text-slate-400">Manage hardware inventory, datasheets, pricing, and stock levels</p>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={fetchProducts}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
-            title="Refresh Catalog"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={() => router.push('/products/create')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold shadow-lg shadow-cyan-500/20 text-sm transition-all"
-          >
-            <Plus className="w-5 h-5" />
-            Add Hardware Item
-          </button>
-        </div>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <PageHeader
+        title="Hardware Catalog & Inventory"
+        subtitle="Manage components, board variants, live warehouse stock levels, and datasheets"
+        breadcrumbs={[{ label: 'Catalog' }, { label: 'Products' }]}
+        action={
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={fetchProducts}
+              loading={loading}
+              icon={RefreshCw}
+              title="Refresh Catalog"
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => router.push('/products/create')}
+              icon={Plus}
+            >
+              Add Hardware Item
+            </Button>
+          </div>
+        }
+      />
+
+      {/* KPI Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Total Products"
+          value={metrics.total}
+          icon={Boxes}
+          accentColor="blue"
+          description="In inventory database"
+        />
+        <StatCard
+          title="Active in Store"
+          value={metrics.active}
+          icon={Layers}
+          accentColor="cyan"
+          description="Visible to customers"
+        />
+        <StatCard
+          title="Low Stock Warning"
+          value={metrics.lowStock}
+          icon={AlertTriangle}
+          accentColor="orange"
+          trend={metrics.lowStock > 0 ? 'down' : 'neutral'}
+          description="Stock ≤ 10 units"
+        />
+        <StatCard
+          title="Out of Stock"
+          value={metrics.outOfStock}
+          icon={XCircle}
+          accentColor="purple"
+          trend={metrics.outOfStock > 0 ? 'down' : 'neutral'}
+          description="Depleted items"
+        />
       </div>
 
-      {/* Search & Filtering Bar */}
-      <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
-        <div className="flex items-center gap-3 flex-1 bg-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-800">
-          <Search className="w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by title, category, or SKU..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Category Dropdown */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => {
-              setSelectedCategory(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500"
-          >
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c === 'All' ? 'All Categories' : c}
-              </option>
-            ))}
-          </select>
-
-          {/* Status Filter Selector */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => {
-                setStatusFilter('all');
+      {/* Search & Filters */}
+      <Card className="p-4 sm:p-5">
+        <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by title, SKU, or category..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                statusFilter === 'all' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              All Status
-            </button>
-            <button
-              onClick={() => {
-                setStatusFilter('active');
-                setCurrentPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                statusFilter === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Active
-            </button>
-            <button
-              onClick={() => {
-                setStatusFilter('archived');
-                setCurrentPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                statusFilter === 'archived' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Archived
-            </button>
+              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all"
+            />
           </div>
 
-          {/* Stock Filter Selector */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => {
-                setStockFilter('all');
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Category Dropdown */}
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
                 setCurrentPage(1);
               }}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                stockFilter === 'all' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400 hover:text-white'
-              }`}
+              className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary cursor-pointer transition-all"
             >
-              Stock: All
-            </button>
-            <button
-              onClick={() => {
-                setStockFilter('low-stock');
-                setCurrentPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                stockFilter === 'low-stock' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Low Stock
-            </button>
-            <button
-              onClick={() => {
-                setStockFilter('out-of-stock');
-                setCurrentPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                stockFilter === 'out-of-stock' ? 'bg-rose-500/20 text-rose-400' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Out
-            </button>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c === 'All' ? 'All Categories' : c}
+                </option>
+              ))}
+            </select>
+
+            {/* Status Filter Selector */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  statusFilter === 'all'
+                    ? 'bg-white dark:bg-slate-800 text-brand-primary dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                All Status
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('active');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  statusFilter === 'active'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('archived');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  statusFilter === 'archived'
+                    ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Archived
+              </button>
+            </div>
+
+            {/* Stock Filter Selector */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setStockFilter('all');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  stockFilter === 'all'
+                    ? 'bg-white dark:bg-slate-800 text-brand-primary dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                All Stock
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStockFilter('low-stock');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  stockFilter === 'low-stock'
+                    ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Low Stock
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStockFilter('out-of-stock');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  stockFilter === 'out-of-stock'
+                    ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Depleted
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Products Table */}
-      <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      {/* Products Table Card */}
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-900 border-b border-slate-800 text-slate-400 text-xs uppercase font-semibold">
-                <th className="p-4">Item Details</th>
-                <th className="p-4">Category / SKU</th>
-                <th className="p-4">Price / Discount</th>
-                <th className="p-4">Stock Control</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Actions</th>
+              <tr className="bg-slate-50 dark:bg-slate-850/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase font-semibold tracking-wider">
+                <th className="py-3.5 px-4">Item Details</th>
+                <th className="py-3.5 px-4">Category / SKU</th>
+                <th className="py-3.5 px-4">Price / Discount</th>
+                <th className="py-3.5 px-4">Warehouse Stock</th>
+                <th className="py-3.5 px-4">Catalog Status</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-sm">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
               {loading ? (
                 // Skeletons
-                [...Array(5)].map((_, i) => (
+                [...Array(6)].map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-lg bg-slate-800"></div>
+                        <div className="w-12 h-12 rounded-xl bg-slate-200 dark:bg-slate-800" />
                         <div className="space-y-1.5">
-                          <div className="w-36 h-4 bg-slate-800 rounded"></div>
-                          <div className="w-20 h-3 bg-slate-800 rounded"></div>
+                          <div className="w-36 h-4 bg-slate-200 dark:bg-slate-800 rounded" />
+                          <div className="w-20 h-3 bg-slate-200 dark:bg-slate-800 rounded" />
                         </div>
                       </div>
                     </td>
-                    <td className="p-4"><div className="w-24 h-4 bg-slate-800 rounded"></div></td>
-                    <td className="p-4"><div className="w-16 h-4 bg-slate-800 rounded"></div></td>
-                    <td className="p-4"><div className="w-24 h-4 bg-slate-800 rounded"></div></td>
-                    <td className="p-4"><div className="w-20 h-4 bg-slate-800 rounded"></div></td>
-                    <td className="p-4"><div className="w-16 h-4 bg-slate-800 rounded ml-auto"></div></td>
+                    <td className="p-4"><div className="w-24 h-4 bg-slate-200 dark:bg-slate-800 rounded" /></td>
+                    <td className="p-4"><div className="w-16 h-4 bg-slate-200 dark:bg-slate-800 rounded" /></td>
+                    <td className="p-4"><div className="w-24 h-4 bg-slate-200 dark:bg-slate-800 rounded" /></td>
+                    <td className="p-4"><div className="w-20 h-4 bg-slate-200 dark:bg-slate-800 rounded" /></td>
+                    <td className="p-4"><div className="w-16 h-4 bg-slate-200 dark:bg-slate-800 rounded ml-auto" /></td>
                   </tr>
                 ))
               ) : paginatedProducts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-12 text-center">
-                    <div className="max-w-sm mx-auto flex flex-col items-center">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3">
-                        <Package className="w-6 h-6" />
-                      </div>
-                      <h3 className="text-base font-bold text-white">No products found</h3>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Try modifying search keywords or clearing active filters.
-                      </p>
-                    </div>
+                    <EmptyState
+                      icon={Package}
+                      title="No components found"
+                      description="No hardware products match the selected filters or search keyword."
+                      action={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSearchTerm('');
+                            setSelectedCategory('All');
+                            setStockFilter('all');
+                            setStatusFilter('all');
+                          }}
+                        >
+                          Clear Filters
+                        </Button>
+                      }
+                    />
                   </td>
                 </tr>
               ) : (
@@ -346,7 +432,10 @@ export default function ProductsPage() {
                       : 0;
 
                   return (
-                    <tr key={product._id} className="hover:bg-slate-900/50 transition-all">
+                    <tr
+                      key={product._id}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                    >
                       {/* Item Details */}
                       <td className="p-4">
                         <div className="flex items-center gap-3">
@@ -356,11 +445,13 @@ export default function ProductsPage() {
                               'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=150&q=80'
                             }
                             alt={product.title}
-                            className="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-800 flex-shrink-0"
+                            className="w-12 h-12 rounded-xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
                           />
                           <div className="min-w-0 max-w-xs">
-                            <div className="font-semibold text-white truncate">{product.title}</div>
-                            <span className="text-xs text-slate-400 truncate block">
+                            <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                              {product.title}
+                            </div>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
                               {product.description?.substring(0, 50) || 'Official TechCrate component'}
                             </span>
                           </div>
@@ -369,21 +460,27 @@ export default function ProductsPage() {
 
                       {/* Category & SKU */}
                       <td className="p-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-900 text-slate-300 border border-slate-800">
+                        <Badge variant="neutral" size="sm">
                           {product.category || 'General'}
-                        </span>
-                        <div className="text-[11px] font-mono text-slate-500 mt-1">
+                        </Badge>
+                        <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500 mt-1">
                           SKU: {product.sku || product._id?.slice(-6).toUpperCase() || 'N/A'}
                         </div>
                       </td>
 
                       {/* Pricing */}
                       <td className="p-4">
-                        <div className="font-bold text-emerald-400">₹{Number(product.price).toLocaleString('en-IN')}</div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          ₹{Number(product.price).toLocaleString('en-IN')}
+                        </div>
                         {discount > 0 && (
-                          <div className="flex items-center gap-1.5 text-[11px]">
-                            <span className="text-slate-500 line-through">₹{product.originalPrice}</span>
-                            <span className="text-amber-400 font-semibold">{discount}% off</span>
+                          <div className="flex items-center gap-1.5 text-[11px] mt-0.5">
+                            <span className="text-slate-400 line-through tabular-nums">
+                              ₹{product.originalPrice}
+                            </span>
+                            <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                              {discount}% off
+                            </span>
                           </div>
                         )}
                       </td>
@@ -392,20 +489,22 @@ export default function ProductsPage() {
                       <td className="p-4">
                         <div className="flex items-center gap-2">
                           <button
+                            type="button"
                             disabled={adjustingStockId === product._id || isOut}
                             onClick={() => handleStockUpdate(product._id, stock, -1)}
-                            className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800 flex items-center justify-center font-bold text-xs disabled:opacity-30"
+                            className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center font-bold text-xs disabled:opacity-30 transition-colors"
                             title="Decrease Stock"
                           >
                             -
                           </button>
-                          <span className="font-mono text-sm font-semibold text-white min-w-[28px] text-center">
+                          <span className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100 min-w-[32px] text-center tabular-nums">
                             {stock}
                           </span>
                           <button
+                            type="button"
                             disabled={adjustingStockId === product._id}
                             onClick={() => handleStockUpdate(product._id, stock, 1)}
-                            className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800 flex items-center justify-center font-bold text-xs disabled:opacity-30"
+                            className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center font-bold text-xs disabled:opacity-30 transition-colors"
                             title="Increase Stock"
                           >
                             +
@@ -415,30 +514,30 @@ export default function ProductsPage() {
 
                       {/* Status Badges */}
                       <td className="p-4">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div>
                             {product.isArchived ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              <Badge variant="warning" size="sm">
                                 Archived
-                              </span>
+                              </Badge>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <Badge variant="success" size="sm">
                                 Active Catalog
-                              </span>
+                              </Badge>
                             )}
                           </div>
                           <div>
                             {isOut ? (
-                              <span className="flex items-center gap-1.5 text-xs text-rose-400 font-medium">
+                              <span className="inline-flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-medium">
                                 <XCircle className="w-3.5 h-3.5" /> Out of Stock
                               </span>
                             ) : isLow ? (
-                              <span className="flex items-center gap-1.5 text-xs text-amber-400 font-medium">
+                              <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
                                 <AlertTriangle className="w-3.5 h-3.5" /> Low ({stock})
                               </span>
                             ) : (
-                              <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-                                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> In Stock ({stock})
+                              <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> In Stock ({stock})
                               </span>
                             )}
                           </div>
@@ -447,26 +546,29 @@ export default function ProductsPage() {
 
                       {/* Actions */}
                       <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           {product.isArchived && (
                             <button
+                              type="button"
                               onClick={() => handleRestore(product)}
-                              className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all"
+                              className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-400 transition-colors"
                               title="Restore to Active Catalog"
                             >
                               <RotateCcw className="w-4 h-4" />
                             </button>
                           )}
                           <button
+                            type="button"
                             onClick={() => router.push(`/products/${product._id}/edit`)}
-                            className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 transition-all"
+                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition-colors"
                             title="Edit Product"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => confirmDelete(product)}
-                            className="p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all"
+                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 transition-colors"
                             title="Archive or Delete Product"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -483,89 +585,95 @@ export default function ProductsPage() {
 
         {/* Pagination Bar */}
         {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
             <div>
               Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredProducts.length)} -{' '}
               {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} of {filteredProducts.length} items
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 disabled:opacity-40 hover:bg-slate-800"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="font-semibold text-white px-2">
+              <span className="font-semibold text-slate-900 dark:text-slate-100 px-2 tabular-nums">
                 Page {currentPage} of {totalPages}
               </span>
               <button
+                type="button"
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 disabled:opacity-40 hover:bg-slate-800"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 disabled:opacity-40 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Delete / Archive Confirmation Modal */}
-      {deleteModal.open && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-rose-400">
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                <AlertOctagon className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Remove Hardware Component</h3>
-                <p className="text-xs text-slate-400">Choose between safe archival and permanent purge.</p>
-              </div>
+      <Modal
+        open={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, product: null, deleting: false, mode: 'archive' })}
+        title="Remove Hardware Component"
+        description="Choose between safe catalog archival and permanent database purge."
+      >
+        <div className="space-y-4">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">Component: </span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">
+              "{deleteModal.product?.title}"
+            </span>
+          </div>
+
+          <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-400">
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200">
+              <strong className="text-amber-700 dark:text-amber-400 block mb-0.5">Safe Archival (Recommended):</strong>
+              Removes the component from customer searches, product recommendations, and active storefront browsing while preserving existing order histories and invoices.
             </div>
-
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Component: <span className="font-semibold text-white">"{deleteModal.product?.title}"</span>
-            </p>
-
-            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-400 space-y-2">
-              <p>
-                <strong className="text-cyan-400">Safe Archival (Recommended):</strong> Immediately removes the component from customer searches, storefront, and active catalog while safeguarding historical order invoices.
-              </p>
-              <p>
-                <strong className="text-rose-400">Permanent Purge:</strong> Erases the record completely from MongoDB. Only permitted if no past customer orders reference this item.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2">
-              <button
-                disabled={deleteModal.deleting}
-                onClick={() => setDeleteModal({ open: false, product: null, deleting: false, mode: 'archive' })}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={deleteModal.deleting}
-                onClick={() => executeDelete(false)}
-                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-lg shadow-amber-600/20"
-              >
-                <Archive className="w-3.5 h-3.5" />
-                {deleteModal.deleting ? 'Archiving...' : 'Archive Product (Safe)'}
-              </button>
-              <button
-                disabled={deleteModal.deleting}
-                onClick={() => executeDelete(true)}
-                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/20"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {deleteModal.deleting ? 'Purging...' : 'Purge DB'}
-              </button>
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 text-rose-900 dark:text-rose-200">
+              <strong className="text-rose-700 dark:text-rose-400 block mb-0.5">Permanent Purge:</strong>
+              Completely deletes the database record. Only allowed if no customer orders reference this hardware item.
             </div>
           </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              variant="outline"
+              size="md"
+              disabled={deleteModal.deleting}
+              onClick={() => setDeleteModal({ open: false, product: null, deleting: false, mode: 'archive' })}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={deleteModal.deleting}
+              onClick={() => executeDelete(false)}
+              icon={Archive}
+              loading={deleteModal.deleting}
+              className="text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800"
+            >
+              Archive Component
+            </Button>
+            <Button
+              variant="danger"
+              size="md"
+              disabled={deleteModal.deleting}
+              onClick={() => executeDelete(true)}
+              icon={Trash2}
+              loading={deleteModal.deleting}
+            >
+              Purge DB
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

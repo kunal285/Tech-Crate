@@ -357,6 +357,10 @@ async function finalizeSessionToOrder(session, { txnId, paymentId, paymentMethod
     taxPrice: session.taxPrice,
     shippingPrice: session.shippingPrice,
     totalPrice: session.totalPrice,
+    itemsPricePaise: session.itemsPricePaise || Math.round(Number(session.itemsPrice || 0) * 100),
+    taxPricePaise: session.taxPricePaise || Math.round(Number(session.taxPrice || 0) * 100),
+    shippingPricePaise: session.shippingPricePaise || Math.round(Number(session.shippingPrice || 0) * 100),
+    totalPricePaise: session.totalPricePaise || Math.round(Number(session.totalPrice || 0) * 100),
     isPaid: true,
     paidAt: new Date(),
     orderStatus: 'Processing',
@@ -765,6 +769,7 @@ const handlePaymentWebhook = async (req, res) => {
     let isPaidEvent = false;
     let isFailedEvent = false;
     let event_id = null;
+    let event_type = null;
 
     if (isCustomSigned) {
       const signature = headers['x-payment-signature'];
@@ -780,6 +785,7 @@ const handlePaymentWebhook = async (req, res) => {
       payment_id = txnId;
       amount = Number(payload.amount || 0);
       event_id = `EVT_${txnId}_${order_id}`;
+      event_type = payload.event || 'payment.paid';
       const statusStr = String(payload.status || payload.event || '').toLowerCase();
       isPaidEvent = statusStr === 'paid' || statusStr === 'payment.paid' || statusStr === 'success';
       isFailedEvent = statusStr.includes('fail') || statusStr.includes('cancelled');
@@ -796,6 +802,7 @@ const handlePaymentWebhook = async (req, res) => {
       payment_id = txnId;
       amount = Number(payload.amount || payload.payable_amount || 0);
       event_id = `AUPI_EVT_${txnId}_${payload.status || 'paid'}`;
+      event_type = payload.event || 'payment.completed';
       const statusStr = String(payload.status || '').toUpperCase();
       isPaidEvent = statusStr === 'COMPLETED' || statusStr === 'PAID' || statusStr === 'SUCCESS';
       isFailedEvent = statusStr === 'FAILED' || statusStr === 'CANCELLED';
@@ -809,7 +816,7 @@ const handlePaymentWebhook = async (req, res) => {
 
       const payload = req.body || {};
       const entity = payload?.payload?.payment?.entity || payload?.payload?.order?.entity || {};
-      const event_type = payload.event || '';
+      event_type = payload.event || 'payment.captured';
       txnId = entity.id || payload.razorpay_payment_id;
       payment_id = txnId;
       order_id = entity.order_id || entity.notes?.session_id || entity.receipt || payload.razorpay_order_id;
@@ -922,10 +929,11 @@ const handlePaymentWebhook = async (req, res) => {
         if (event_id) {
           await WebhookEvent.create({
             event_id,
+            event_type: event_type || 'payment.captured',
             gateway: isRazorpay ? 'Razorpay' : 'AutoUPI',
             order_id: existingOrder.order_id,
             processed: true,
-          }).catch(() => {});
+          }).catch((err) => console.error('[WebhookEvent save error]', err.message));
         }
 
         return res.status(200).json({ success: true, message: 'Order updated to PAID.', order_id: existingOrder.order_id, processed: true });

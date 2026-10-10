@@ -7,6 +7,7 @@ const Coupon = require('../models/Coupon');
 const Cart = require('../models/Cart');
 const autoUpiService = require('../services/autoUpiService');
 const razorpayService = require('../services/razorpayService');
+const { calculateOrderTotals } = require('../utils/money');
 
 // @desc Initiate a checkout session — reserves inventory and creates an AutoUPI / Razorpay order
 // @route POST /api/checkout/initiate
@@ -97,11 +98,17 @@ const initiateCheckout = async (req, res) => {
       }
     }
 
-    // ── 3. Tax & shipping ─────────────────────────────────────────────────────
-    const discountedSubtotal = Math.max(0, itemsPrice - discountAmount);
-    const shippingPrice = discountedSubtotal >= 999 || discountedSubtotal === 0 ? 0 : 70;
-    const taxPrice = Math.round(discountedSubtotal * 0.18); // 18% GST
-    const totalPrice = discountedSubtotal + shippingPrice + taxPrice;
+    // ── 3. Authoritative Tax & shipping calculation in INR & Paise ────────────
+    const totals = calculateOrderTotals({ itemsPrice, discountAmount });
+    const {
+      shippingPrice,
+      taxPrice,
+      totalPrice,
+      itemsPricePaise,
+      taxPricePaise,
+      shippingPricePaise,
+      totalPricePaise,
+    } = totals;
 
     // ── 4. Create CheckoutSession ──────────────────────────────────────────────
     const session = new CheckoutSession({
@@ -121,6 +128,10 @@ const initiateCheckout = async (req, res) => {
       taxPrice,
       shippingPrice,
       totalPrice,
+      itemsPricePaise,
+      taxPricePaise,
+      shippingPricePaise,
+      totalPricePaise,
       discountApplied: discountAmount,
       coupon: appliedCoupon,
       expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min session
@@ -145,6 +156,10 @@ const initiateCheckout = async (req, res) => {
         taxPrice,
         shippingPrice,
         totalPrice,
+        itemsPricePaise,
+        taxPricePaise,
+        shippingPricePaise,
+        totalPricePaise,
         isPaid: false,
         orderStatus: 'Placed',
         paymentResult: {
