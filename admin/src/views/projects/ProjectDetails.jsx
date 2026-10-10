@@ -250,7 +250,7 @@ export default function ProjectDetails() {
         {/* Description */}
         <div className="space-y-2">
           <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
-            Project Overview & Bill of Materials
+            Project Overview & Architecture
           </span>
           <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
             {description}

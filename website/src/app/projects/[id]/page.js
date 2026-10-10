@@ -82,6 +82,63 @@ function getBOMItems(componentsRequired, description) {
   ];
 }
 
+// Strip out any embedded BOM component lists or headings so Project Overview is clean narrative only
+function getCleanOverview(description) {
+  if (!description) {
+    return 'This DIY engineering project provides a complete end-to-end hardware tutorial with pin compatibility, itemized components, and tested firmware code.';
+  }
+
+  const lines = description.split('\n');
+  const cleanedLines = [];
+  let inBOMSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Check if line indicates start of a BOM section
+    if (
+      /^(bill of materials|bom|components required|components included|included components|hardware list|package contents|kit contents|included in kit|parts list)[\s:]*$/i.test(
+        trimmed
+      )
+    ) {
+      inBOMSection = true;
+      continue;
+    }
+
+    // Reset if we encounter a new narrative section heading
+    if (/^(overview|architecture|about|description|summary|features|how it works)[\s:]*$/i.test(trimmed)) {
+      inBOMSection = false;
+      continue;
+    }
+
+    if (inBOMSection) {
+      if (!trimmed || /^[-*•\d+.)]\s+/i.test(trimmed)) {
+        continue;
+      } else {
+        inBOMSection = false;
+      }
+    }
+
+    // Strip standalone component bullets (e.g. "- 1x ESP32 NodeMCU", "- Ultrasonic sensor")
+    const isPureBOMBullet =
+      /^[-*•]\s+/i.test(trimmed) &&
+      /\b(esp32|arduino|sensor|relay|oled|resistor|jumper|breadboard|module|motor|servo|display|battery|wire|probe|ch340|microcontroller|buzzer|potentiometer|capacitor|diode|pcb)\b/i.test(
+        trimmed
+      ) &&
+      trimmed.length < 80;
+
+    if (!isPureBOMBullet) {
+      cleanedLines.push(line);
+    }
+  }
+
+  const result = cleanedLines.join('\n').trim();
+  return (
+    result ||
+    'This DIY engineering project provides a complete end-to-end hardware tutorial with pin compatibility, itemized components, and tested firmware code.'
+  );
+}
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -180,6 +237,7 @@ export default function ProjectDetailPage() {
     'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1200&q=80';
 
   const bomItems = getBOMItems(componentsRequired, description);
+  const cleanOverview = getCleanOverview(description);
 
   const handleCopyCode = () => {
     if (!codeSnippet) return;
@@ -346,8 +404,7 @@ export default function ProjectDetailPage() {
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line font-normal">
-              {description ||
-                'This DIY engineering project provides a complete end-to-end hardware tutorial with pin compatibility, itemized components, and tested firmware code.'}
+              {cleanOverview}
             </p>
           </div>
 

@@ -256,10 +256,10 @@ export default function AddProject() {
             </div>
 
             <Textarea
-              label="Project Overview & BOM Description *"
+              label="Project Overview & Architecture Description *"
               rows={5}
               required
-              placeholder="Detail the circuit architecture, bill of materials components needed, and learning objectives for makers..."
+              placeholder="Detail the circuit architecture, hardware operation, and learning objectives for makers..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
