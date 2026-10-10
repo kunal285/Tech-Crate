@@ -24,6 +24,10 @@ android/app/src/main/assets/index.android.bundle
 android/app/src/main/assets/index.android.bundle.map
 backend/uploads/*
 !backend/uploads/.gitkeep
+.next/
+**/.next/
+out/
+**/out/
 
 # Logs & Caches
 npm-debug.log*
