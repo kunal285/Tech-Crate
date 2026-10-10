@@ -1,11 +1,13 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Box, Plus, Layers } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 
 export default function ProjectKits() {
   const [kits, setKits] = useState([]);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     loadKits();
@@ -28,7 +30,7 @@ export default function ProjectKits() {
           <p className="text-sm text-slate-400">Bundle components into complete DIY learning packages</p>
         </div>
         <button
-          onClick={() => navigate('/project-kits/create')}
+          onClick={() => router.push('/project-kits/create')}
           className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm rounded-xl flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> Add Project Kit

@@ -16,17 +16,39 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
   },
   timeout: 60000,
 });
 
 if (isClient) {
-  // Response Interceptor: Handle 401 / 403 Session Expiration
+  // Request Interceptor: Cache-busting for browser requests
+  api.interceptors.request.use((config) => {
+    config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    config.headers['Pragma'] = 'no-cache';
+    config.headers['Expires'] = '0';
+    if (!config.method || config.method.toLowerCase() === 'get') {
+      config.params = { ...config.params, _t: Date.now() };
+    }
+    return config;
+  });
+}
+
+let isRedirecting = false;
+
+if (isClient) {
+  // Response Interceptor: Handle 401 Session Expiration
   api.interceptors.response.use(
     (response) => response,
     (error) => {
       if (error.response?.status === 401) {
-        if (!window.location.pathname.includes('/login')) {
+        if (!isRedirecting && !window.location.pathname.includes('/login')) {
+          isRedirecting = true;
+          try {
+            localStorage.removeItem('adminUser');
+          } catch {}
           window.location.href = '/login?expired=1';
         }
       }

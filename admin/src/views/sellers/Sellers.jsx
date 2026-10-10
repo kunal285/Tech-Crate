@@ -1,11 +1,13 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Store, CheckCircle, Clock } from 'lucide-react';
 import { sellerService } from '../../services/sellerService';
 
 export default function Sellers() {
   const [sellers, setSellers] = useState([]);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     loadSellers();
@@ -28,7 +30,7 @@ export default function Sellers() {
           <p className="text-sm text-slate-400">Manage hardware vendors, store applications, and revenue payouts</p>
         </div>
         <button
-          onClick={() => navigate('/sellers/approvals')}
+          onClick={() => router.push('/sellers/approvals')}
           className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold text-sm rounded-xl flex items-center gap-2"
         >
           <Clock className="w-4 h-4" /> Pending Approvals
@@ -52,7 +54,7 @@ export default function Sellers() {
               <p className="text-xs font-mono text-slate-500 mt-1">GST: {s.gstNumber}</p>
             </div>
             <button
-              onClick={() => navigate(`/sellers/${s._id}`)}
+              onClick={() => router.push(`/sellers/${s._id}`)}
               className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl"
             >
               View Full Store Profile →

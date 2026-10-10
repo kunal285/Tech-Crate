@@ -1,28 +1,36 @@
 # Tech Crate — Admin Management Panel
 
 > **Enterprise Operations & Store Management Web Dashboard**  
-> Built with React 18, Vite 5, React Router v6, Tailwind CSS, Recharts, and Lucide Icons.
+> Built with Next.js (App Router), React 18, Tailwind CSS, Recharts, and Lucide Icons.  
+> 100% Visual and Design Token Parity with the Tech Crate Customer Storefront (`website/`).
 
 ---
 
-## 1. Overview & Capabilities
+## 1. Overview & Architecture
 
-The Tech Crate Admin Web Panel is a dedicated portal for store administrators, managers, and fulfillment staff to oversee catalog management, track live orders, inspect analytics, and manage customer operations.
+The Tech Crate Admin Web Panel provides privileged management for store administrators, managers, and fulfillment staff to oversee catalog management, track live orders, inspect analytics, audit replacement claims, and manage vendor operations.
 
 ### Key Capabilities
-* **Interactive Business Dashboard**: Real-time sales summaries, total revenue, average order value (AOV), pending dispatches, and recent order feeds visualized via Recharts.
-* **Catalog & Inventory Management**:
-  * Create, update, and categorize electronic components, kits, and accessories.
-  * Multi-variant handling (voltage, package, sensor version) with individual SKU and stock tracking.
-  * Low-stock warnings and out-of-stock badges.
-  * Image upload and Cloudinary media management.
-* **Order Processing & Fulfillment Hub**:
-  * Filter orders by status: `Placed`, `Confirmed`, `Shipped`, `Delivered`, `Cancelled`.
-  * Update order lifecycle and assign courier partners (Delhivery, BlueDart, India Post) with tracking IDs.
-  * Generate and print official GST Tax Invoices.
-* **Return & Replacement Claims**: Inspect customer claims under the 7-day replacement policy, verify test notes, and approve or reject claims.
-* **Promotions & Marketing**: Create percentage/flat discount coupons, minimum purchase rules, and update homepage promotional banners.
-* **Role-Based Access Control (RBAC)**: Interface permission gating tailored for specific staff duties.
+* **Storefront Design System Parity**: Built using the exact same tokens as `website/` (Brand Navy `#032762`, Brand Blue `#2563EB`, Accent Orange `#F97316`, `Outfit` headings and body font, and `JetBrains Mono` for tabular data, currencies, and SKUs).
+* **Light / Dark Theme Support**: Light default matching the storefront with instant dark mode switcher persisted in `localStorage` with zero flash-of-unstyled-content (FOUC).
+* **Collapsible & Grouped Sidebar Navigation**:
+  * **Overview**: Dashboard, Analytics
+  * **Catalog**: Products & Inventory, Categories, Projects & Kits, Reviews
+  * **Sales & Operations**: Orders, Replacement Claims, Payments
+  * **Marketplace**: Sellers & Vendors
+  * **Marketing**: Coupons, Banners, Push Notifications
+  * **Administration**: Users & Roles, Platform Settings
+* **Component Library (`src/components/ui/`)**: Accessible, dense operational primitives (`Button`, `Input`, `Select`, `Textarea`, `Checkbox`, `Switch`, `Badge`, `StatusBadge`, `Card`, `StatCard`, `DataTable`, `Modal`, `ConfirmDialog`, `Tabs`, `EmptyState`).
+* **Design Kit Route**: Dedicated dev route at [`/ui-kit`](http://localhost:5173/ui-kit) showcasing all components, states, and variants in both light and dark modes.
+* **Role-Aware Landing Navigation**:
+  * `order_staff` -> `/orders`
+  * `finance` -> `/payments`
+  * `support` -> `/replacements`
+  * `store_manager` -> `/products`
+  * `super_admin` / `admin` -> `/dashboard`
+* **Logistics & Tax Compliance**:
+  * Courier partner assignment (Delhivery, Shiprocket, BlueDart, DTDC, India Post) with auto-generated tracking URLs.
+  * Print-friendly statutory GST Tax Invoice (GSTIN, HSN 8542, CGST/SGST, and IGST breakdowns).
 
 ---
 
@@ -30,83 +38,85 @@ The Tech Crate Admin Web Panel is a dedicated portal for store administrators, m
 
 ```
 admin/
-├── public/                 # Static brand assets and icons
+├── docs/
+│   └── design-tokens.md        # Complete token reference mapped to storefront
+├── public/                     # Static brand assets and icons
 ├── src/
-│   ├── components/         # Reusable dashboard UI components
-│   │   ├── Navbar.jsx      # Top navigation with profile dropdown & notifications
-│   │   ├── Sidebar.jsx     # Navigation sidebar with permission-filtered links
-│   │   ├── StatCard.jsx    # Metric counter card with trend indicators
-│   │   └── Modal.jsx       # Dialogs for order updates, product creation, etc.
-│   ├── context/            # AuthContext, ThemeContext, AdminState
-│   ├── pages/              # Main dashboard views
-│   │   ├── Dashboard.jsx   # Revenue analytics, order volume graphs, quick stats
-│   │   ├── Products.jsx    # Product list, search, filter, and stock levels
-│   │   ├── ProductForm.jsx # Add / Edit product with variants, specs, and photos
-│   │   ├── Orders.jsx      # Order fulfillment pipeline & tracking updates
-│   │   ├── OrderDetail.jsx # Deep order inspection, line items, customer address
-│   │   ├── Replacements.jsx# 7-day replacement claim processing queue
-│   │   ├── Categories.jsx  # Category taxonomy management
-│   │   ├── Coupons.jsx     # Discount coupon generator and usage limits
-│   │   ├── Users.jsx       # Customer list and staff role assignment (Super Admin)
-│   │   └── Login.jsx       # Secure administrative staff authentication
-│   ├── services/           # Axios client configured with JWT interceptors
-│   ├── utils/              # Currency formatters (INR), date helpers, validation
-│   ├── App.jsx             # React Router routing configuration with ProtectedRoute
-│   └── main.jsx            # React root mount
-├── vite.config.js          # Vite build & proxy settings
-└── package.json            # Dependencies & scripts
+│   ├── app/                    # Next.js App Router structure
+│   │   ├── layout.jsx          # Root layout (Outfit & JetBrains Mono, Theme script)
+│   │   ├── page.jsx            # Root redirect to /dashboard
+│   │   ├── globals.css         # Design tokens, CSS variables, and light/dark themes
+│   │   ├── not-found.jsx       # 404 handler
+│   │   ├── error.jsx           # Error boundary
+│   │   ├── access-denied/      # 403 Forbidden page for restricted roles
+│   │   ├── login/              # Admin login page with TOTP 2FA & role landing
+│   │   ├── (dashboard)/        # Protected dashboard shell
+│   │   │   ├── layout.jsx      # Sidebar & Header shell with a11y skip link
+│   │   │   ├── loading.jsx     # Route skeleton loader
+│   │   │   ├── page.jsx        # Executive dashboard analytics
+│   │   │   ├── ui-kit/         # Component library preview route
+│   │   │   ├── products/       # Product catalog, create, edit, approvals
+│   │   │   ├── orders/         # Order fulfillment pipeline & order details
+│   │   │   ├── replacements/   # 7-day replacement claim queue
+│   │   │   ├── categories/     # Category taxonomy
+│   │   │   ├── coupons/        # Promotional discounts
+│   │   │   ├── users/          # User accounts & role management
+│   │   │   ├── sellers/        # Marketplace sellers & approvals
+│   │   │   ├── projects/       # Engineering project kits & BOM
+│   │   │   ├── payments/       # Transaction revenue logs
+│   │   │   ├── reviews/        # Customer feedback & ratings
+│   │   │   ├── banners/        # Carousel banner posters
+│   │   │   ├── notifications/  # Push notifications
+│   │   │   ├── analytics/      # High-density operational charts
+│   │   │   └── settings/       # Store & platform configurations
+│   │   └── api/                # Route handlers (auth, proxy, upload)
+│   ├── components/             # Shell and layout components
+│   │   ├── Header.jsx          # Sticky header with search, notifications, theme toggle
+│   │   ├── Sidebar.jsx         # Grouped collapsible rail navigation (76px / 256px)
+│   │   ├── PageHeader.jsx      # Standardized title, breadcrumb, and action slots
+│   │   ├── ThemeToggle.jsx     # Light/Dark mode switcher
+│   │   └── ui/                 # Reusable operational component library
+│   ├── constants/              # RBAC roles & permissions
+│   ├── services/               # API clients with auto cache-busting
+│   ├── store/                  # Zustand authentication state
+│   └── views/                  # Modular view page implementations
 ```
 
 ---
 
-## 3. Role-Based Access Control (RBAC) in Admin UI
+## 3. Getting Started & Scripts
 
-The navigation sidebar and page actions dynamically adapt according to the logged-in user's role:
+### Prerequisites
+* Node.js v18+ (tested on Node.js v20+)
+* npm v9+
 
-| Role | Permitted Sections in Admin Panel |
-| :--- | :--- |
-| **`super_admin`** | Full access: Dashboard, Products, Orders, Replacements, Categories, Coupons, Users & Staff Management, System Settings. |
-| **`store_manager`** | Catalog access: Products, Categories, Stock, Coupons, and Dashboard Analytics. |
-| **`order_staff`** | Fulfillment access: Orders list, dispatch updates, tracking number assignment, and shipping labels. |
-| **`support`** | Customer assistance: Order lookup, customer queries, and processing 7-day replacement claims. |
-| **`finance`** | Financial records: Invoices, GST tax summaries, revenue charts, and refund processing records. |
-
----
-
-## 4. Environment Variables Configuration
-
-Create a `.env` file in `admin/`:
-
+### Environment Configuration
+Ensure `.env` contains:
 ```env
-# Backend API Base URL
-VITE_API_URL=http://localhost:5000/api/v1
+# Backend API URL (for server-side proxy route handlers)
+NEXT_PUBLIC_API_URL=https://tech-crate.onrender.com/api
+# Or local dev: NEXT_PUBLIC_API_URL=http://localhost:5000/api
 ```
 
----
-
-## 5. Development & Production Commands
-
+### Running Locally
 ```bash
-# Navigate to admin directory
-cd admin
-
-# Install dependencies
+# 1. Install dependencies
 npm install
 
-# Start Vite development server on port 5173
+# 2. Start local development server (runs on port 5173)
 npm run dev
 
-# Build optimized production bundle
+# 3. Production build verification
 npm run build
 
-# Preview production build locally
-npm run preview
+# 4. Production start
+npm run start
+
+# 5. Code lint verification
+npm run lint
 ```
 
----
-
-## 6. Security Best Practices for Admin Access
-
-* Administrative accounts should always be granted least-privilege roles (e.g., dispatch operators receive `order_staff`, not `super_admin`).
-* Tokens are verified against the backend RBAC middleware on every restricted API call.
-* Unauthorized routes automatically redirect to an "Access Denied" view or the Login screen.
+Access the panel at:
+* **Admin Dashboard**: `http://localhost:5173/dashboard`
+* **Component Library (UI Kit)**: `http://localhost:5173/ui-kit`
+* **Default Credentials**: `admin@techcrate.com` / `password123`

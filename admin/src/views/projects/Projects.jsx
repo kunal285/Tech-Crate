@@ -1,11 +1,13 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Cpu, Plus, Code, Layers } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 
 export default function Projects() {
   const [projects, setProjects] = useState([]);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     loadProjects();
@@ -28,7 +30,7 @@ export default function Projects() {
           <p className="text-sm text-slate-400">Manage turn-key DIY electronics kits, schematic diagrams, and C++ source code</p>
         </div>
         <button
-          onClick={() => navigate('/projects/create')}
+          onClick={() => router.push('/projects/create')}
           className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-sm rounded-xl flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> Create New Engineering Project
@@ -49,7 +51,7 @@ export default function Projects() {
             </div>
             <p className="text-xs text-slate-400 line-clamp-2">{p.description}</p>
             <button
-              onClick={() => navigate(`/projects/${p._id}`)}
+              onClick={() => router.push(`/projects/${p._id}`)}
               className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl"
             >
               View Full Schematic & BOM Details →

@@ -1,10 +1,12 @@
+'use client';
+
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 
 export default function AddProject() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     title: '',
     subtitle: '',
@@ -22,7 +24,7 @@ export default function AddProject() {
         ...formData,
         price: Number(formData.price),
       });
-      navigate('/projects');
+      router.push('/projects');
     } catch (err) {
       alert(err.message);
     }
@@ -30,7 +32,7 @@ export default function AddProject() {
 
   return (
     <div className="p-8 space-y-6 max-w-2xl">
-      <button onClick={() => navigate('/projects')} className="flex items-center gap-2 text-sm text-cyan-400 font-semibold hover:underline">
+      <button onClick={() => router.push('/projects')} className="flex items-center gap-2 text-sm text-cyan-400 font-semibold hover:underline">
         <ArrowLeft className="w-4 h-4" /> Back to Projects
       </button>
 

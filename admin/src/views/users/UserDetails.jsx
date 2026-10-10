@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   User,
@@ -14,8 +16,9 @@ import {
 import { userService } from '../../services/userService';
 
 export default function UserDetails() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const params = useParams();
+  const id = params?.id;
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +53,7 @@ export default function UserDetails() {
         <AlertCircle className="w-12 h-12 text-rose-400 mx-auto" />
         <h2 className="text-xl font-bold text-white">User Record Not Found</h2>
         <button
-          onClick={() => navigate('/users')}
+          onClick={() => router.push('/users')}
           className="px-4 py-2 rounded-xl bg-slate-800 text-white text-sm"
         >
           Back to User List
@@ -62,7 +65,7 @@ export default function UserDetails() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-3xl">
       <button
-        onClick={() => navigate('/users')}
+        onClick={() => router.push('/users')}
         className="flex items-center gap-2 text-sm text-cyan-400 font-semibold hover:underline"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Users

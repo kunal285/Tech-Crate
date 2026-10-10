@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { Bell, Send, CheckCircle2, Trash2, Clock, Users } from 'lucide-react';
 import api from '../../services/api';

@@ -21,14 +21,22 @@ export function middleware(request) {
   const isLoginPage = pathname === '/login' || pathname === '/admin/login';
   const isAccessDeniedPage = pathname === '/access-denied';
 
-  // 1. Unauthenticated users trying to access protected routes -> redirect to /login
+  // 1. If visiting login with expired/logout flag, wipe cookies and stay on login
+  if (isLoginPage && (request.nextUrl.searchParams.has('expired') || request.nextUrl.searchParams.has('logout'))) {
+    const res = NextResponse.next();
+    res.cookies.delete('admin_token');
+    res.cookies.delete('admin_role');
+    return res;
+  }
+
+  // 2. Unauthenticated users trying to access protected routes -> redirect to /login
   if (!token && !isLoginPage) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // 2. Authenticated user visiting /login -> redirect to /dashboard
+  // 3. Authenticated user visiting /login -> redirect to /dashboard
   if (token && isLoginPage) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }

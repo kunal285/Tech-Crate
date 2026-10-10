@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Save,
@@ -27,8 +29,9 @@ const CATEGORIES = [
 ];
 
 export default function EditProduct() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const params = useParams();
+  const id = params?.id;
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -189,7 +192,7 @@ export default function EditProduct() {
         specifications,
       });
 
-      navigate('/products');
+      router.push('/products');
     } catch (err) {
       console.error('[Update Error]', err);
       setError(err.response?.data?.message || err.message || 'Error updating product.');
@@ -216,7 +219,7 @@ export default function EditProduct() {
   return (
     <div className="p-8 space-y-6 max-w-4xl mx-auto">
       <button
-        onClick={() => navigate('/products')}
+        onClick={() => router.push('/products')}
         className="flex items-center gap-2 text-xs text-cyan-400 font-semibold hover:underline"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Products

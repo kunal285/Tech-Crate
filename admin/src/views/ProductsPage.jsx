@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import {
   Package,
   Plus,
@@ -22,7 +24,7 @@ import api from '../services/api';
 const ITEMS_PER_PAGE = 10;
 
 export default function ProductsPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -166,7 +168,7 @@ export default function ProductsPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => navigate('/products/create')}
+            onClick={() => router.push('/products/create')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold shadow-lg shadow-cyan-500/20 text-sm transition-all"
           >
             <Plus className="w-5 h-5" />
@@ -456,7 +458,7 @@ export default function ProductsPage() {
                             </button>
                           )}
                           <button
-                            onClick={() => navigate(`/products/${product._id}/edit`)}
+                            onClick={() => router.push(`/products/${product._id}/edit`)}
                             className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 transition-all"
                             title="Edit Product"
                           >

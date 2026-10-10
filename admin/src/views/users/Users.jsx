@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import {
   Users as UsersIcon,
   Eye,
@@ -18,6 +20,7 @@ import { userService } from '../../services/userService';
 const ITEMS_PER_PAGE = 10;
 
 export default function Users() {
+  const router = useRouter();
   const [usersList, setUsersList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,8 +30,6 @@ export default function Users() {
   // Confirmation Modals
   const [deleteModal, setDeleteModal] = useState({ open: false, user: null, loading: false });
   const [roleModal, setRoleModal] = useState({ open: false, user: null, newRole: '', loading: false });
-
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadUsers();
@@ -227,7 +228,7 @@ export default function Users() {
                     {/* Actions */}
                     <td className="p-4 text-right space-x-2">
                       <button
-                        onClick={() => navigate(`/users/${u._id}`)}
+                        onClick={() => router.push(`/users/${u._id}`)}
                         className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-colors"
                         title="View User Details"
                       >

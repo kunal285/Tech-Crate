@@ -1,15 +1,18 @@
+'use client';
+
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Store, ShieldCheck, DollarSign } from 'lucide-react';
 
 export default function SellerDetails() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const params = useParams();
+  const id = params?.id;
+  const router = useRouter();
 
   return (
     <div className="p-8 space-y-6">
       <button
-        onClick={() => navigate('/sellers')}
+        onClick={() => router.push('/sellers')}
         className="flex items-center gap-2 text-sm text-cyan-400 font-semibold hover:underline"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Sellers

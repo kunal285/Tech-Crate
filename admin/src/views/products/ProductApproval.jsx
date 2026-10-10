@@ -1,9 +1,11 @@
+'use client';
+
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, X } from 'lucide-react';
 
 export default function ProductApproval() {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const pendingProducts = [
     { _id: 'pa1', title: 'STM32F103C8T6 Blue Pill Board', seller: 'Embedded Micro Hub', price: 299 },
@@ -12,7 +14,7 @@ export default function ProductApproval() {
 
   return (
     <div className="p-8 space-y-6">
-      <button onClick={() => navigate('/products')} className="flex items-center gap-2 text-sm text-cyan-400 font-semibold hover:underline">
+      <button onClick={() => router.push('/products')} className="flex items-center gap-2 text-sm text-cyan-400 font-semibold hover:underline">
         <ArrowLeft className="w-4 h-4" /> Back to Products
       </button>
 

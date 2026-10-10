@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Tag, Layers, CheckCircle } from 'lucide-react';
 import api from '../../services/api';

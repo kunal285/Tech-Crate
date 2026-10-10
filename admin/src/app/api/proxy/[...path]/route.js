@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const BACKEND_URL = (
   process.env.BACKEND_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
@@ -38,11 +41,13 @@ async function proxyRequest(request, { params }) {
       method: request.method,
       headers,
       body,
+      cache: 'no-store',
     });
 
     const responseHeaders = new Headers();
     const contentType = backendRes.headers.get('content-type') || 'application/json';
     responseHeaders.set('Content-Type', contentType);
+    responseHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
     const responseData = await backendRes.arrayBuffer();
     return new NextResponse(responseData, {

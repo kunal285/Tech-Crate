@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Settings, Save, Percent, ShieldCheck, Mail, Phone, ToggleLeft, ToggleRight } from 'lucide-react';
 

@@ -1,5 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Plus,
@@ -12,7 +14,17 @@ import {
   Layers,
   HelpCircle,
   Cpu,
+  Save,
+  AlertTriangle,
 } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
+import Textarea from '@/components/ui/Textarea';
+import { Checkbox, Switch } from '@/components/ui/Checkbox';
+import { Card } from '@/components/ui/Card';
+import Tabs from '@/components/ui/Tabs';
 import { productService } from '../../services/productService';
 import api from '../../services/api';
 
@@ -29,10 +41,12 @@ const CATEGORIES = [
 ];
 
 export default function AddProduct() {
-  const navigate = useNavigate();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState('basics');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState(null);
   const [error, setError] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -42,7 +56,7 @@ export default function AddProduct() {
   const [description, setDescription] = useState('');
   const [datasheetUrl, setDatasheetUrl] = useState('');
 
-  // Hardware Specifications State
+  // Specifications
   const [specifications, setSpecifications] = useState({
     operatingVoltage: '5V DC',
     pinCount: 'N/A',
@@ -51,11 +65,17 @@ export default function AddProduct() {
     weight: '',
   });
 
-  // Pricing State: Price & Discounted Price
-  const [originalPrice, setOriginalPrice] = useState('');
-  const [discountedPrice, setDiscountedPrice] = useState('');
+  // Pricing
+  const [originalPrice, setOriginalPrice] = useState('599');
+  const [discountedPrice, setDiscountedPrice] = useState('449');
 
-  // Features State (Array of feature bullet points)
+  // Variants (e.g. Header soldered vs unsoldered)
+  const [variants, setVariants] = useState([
+    { name: 'Standard Pin Header (Unsoldered)', priceOffset: 0, stock: 25 },
+    { name: 'Pre-Soldered Pin Header', priceOffset: 50, stock: 15 },
+  ]);
+
+  // Features List
   const [features, setFeatures] = useState([
     'High-performance microcontroller board for IoT & robotics',
     'Integrated 2.4 GHz Wi-Fi and Bluetooth connectivity',
@@ -74,7 +94,18 @@ export default function AddProduct() {
 
   const fileInputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
-  // Image Upload handler for specific slot (0, 1, 2, 3)
+  // Unsaved Changes Protection
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
   const handleImageUpload = async (slotIndex, file) => {
     if (!file) return;
     setUploadingSlot(slotIndex);
@@ -94,522 +125,381 @@ export default function AddProduct() {
           updated[slotIndex] = res.data.url;
           return updated;
         });
+        setIsDirty(true);
       }
     } catch (err) {
       console.error('[Upload Error]', err);
-      setError(err.response?.data?.message || 'Failed to upload image. You can also paste an image URL directly.');
+      setError('Image upload failed. Please verify format (PNG/JPG).');
     } finally {
       setUploadingSlot(null);
     }
   };
 
-  const updateImageUrl = (slotIndex, url) => {
-    setImages((prev) => {
-      const updated = [...prev];
-      updated[slotIndex] = url;
-      return updated;
-    });
-  };
-
-  // Add Feature item
   const handleAddFeature = () => {
     if (newFeatureInput.trim()) {
-      setFeatures((prev) => [...prev, newFeatureInput.trim()]);
+      setFeatures([...features, newFeatureInput.trim()]);
       setNewFeatureInput('');
+      setIsDirty(true);
     }
   };
 
-  // Remove Feature item
-  const handleRemoveFeature = (index) => {
-    setFeatures((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveFeature = (idx) => {
+    setFeatures(features.filter((_, i) => i !== idx));
+    setIsDirty(true);
   };
 
-  // Calculate discount %
-  const origNum = Number(originalPrice) || 0;
-  const discNum = Number(discountedPrice) || 0;
-  const discountPercent =
-    origNum > 0 && discNum > 0 && origNum > discNum
-      ? Math.round(((origNum - discNum) / origNum) * 100)
-      : null;
+  const handleAddVariant = () => {
+    setVariants([...variants, { name: 'New Variant Option', priceOffset: 0, stock: 10 }]);
+    setIsDirty(true);
+  };
+
+  const handleRemoveVariant = (idx) => {
+    setVariants(variants.filter((_, i) => i !== idx));
+    setIsDirty(true);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
-
     if (!title.trim()) {
       setError('Product title is required.');
+      setActiveTab('basics');
       return;
     }
-
-    if (!description.trim()) {
-      setError('Product description is required.');
-      return;
-    }
-
-    if (!originalPrice || origNum <= 0) {
-      setError('Please provide a valid regular price.');
-      return;
-    }
-
-    // Filter valid image URLs
-    const validImages = images.map((img) => img.trim()).filter(Boolean);
-    if (validImages.length === 0) {
-      setError('Please provide at least 1 image for the product (up to 4 images).');
+    if (!sku.trim()) {
+      setError('Unique SKU code is required.');
+      setActiveTab('basics');
       return;
     }
 
     setIsSubmitting(true);
+    setError(null);
+
     try {
-      const effectiveSellingPrice = discNum > 0 ? discNum : origNum;
-
-      await productService.createProduct({
+      const productPayload = {
         title: title.trim(),
-        description: description.trim(),
+        name: title.trim(),
+        sku: sku.trim().toUpperCase(),
         category,
-        stock: Number(stock) || 10,
-        originalPrice: origNum,
-        discountedPrice: discNum > 0 ? discNum : origNum,
-        price: effectiveSellingPrice,
-        discountPercentage: discountPercent || 0,
-        features: features.filter((f) => f.trim().length > 0),
-        images: validImages.slice(0, 4),
-        sku: sku.trim() || undefined,
-        datasheetUrl: datasheetUrl.trim() || '',
+        price: Number(discountedPrice || originalPrice),
+        originalPrice: Number(originalPrice),
+        stock: Number(stock),
+        description: description.trim(),
+        datasheetUrl: datasheetUrl.trim(),
+        features,
         specifications,
-      });
+        variants,
+        images: images.filter(Boolean),
+        image: images[0] || '',
+      };
 
-      navigate('/products');
+      await productService.createProduct(productPayload);
+      setIsDirty(false);
+      router.push('/products');
     } catch (err) {
       console.error('[Create Product Error]', err);
-      setError(err.response?.data?.message || err.message || 'Error creating product.');
+      setError(err.response?.data?.message || err.message || 'Failed to publish component');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const slotLabels = [
-    { title: 'Image 1 (Main Cover)', desc: 'Primary thumbnail on catalog & search' },
-    { title: 'Image 2 (Detail View)', desc: 'Top view / angle board inspection' },
-    { title: 'Image 3 (Pinout / Diagram)', desc: 'GPIO pinout & wiring diagram' },
-    { title: 'Image 4 (In-Hand / Package)', desc: 'Close-up texture & kit packaging' },
-  ];
-
   return (
-    <div className="p-8 space-y-6 max-w-4xl mx-auto">
-      {/* Top Navigation */}
-      <button
-        onClick={() => navigate('/products')}
-        className="flex items-center gap-2 text-xs text-cyan-400 font-semibold hover:underline"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Component Catalog
-      </button>
-
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Add New Hardware Product</h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Complete listing details with title, description, features, pricing & 4 product gallery images.
-        </p>
-      </div>
+    <div className="space-y-6 max-w-4xl">
+      <PageHeader
+        title="Add Hardware Component"
+        subtitle="Publish a new component or DIY maker kit to the catalog"
+        icon={Cpu}
+        breadcrumbs={[
+          { label: 'Products', href: '/products' },
+          { label: 'New Product' },
+        ]}
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/products')}
+              icon={ArrowLeft}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={isSubmitting}
+              onClick={handleSubmit}
+              icon={Save}
+            >
+              Publish SKU
+            </Button>
+          </div>
+        }
+      />
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold">
-          {error}
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 text-xs sm:text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Details Card */}
-        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-slate-800 pb-2">
-            1. Basic Component Information
-          </h3>
+      {/* Form Section Tabs */}
+      <Tabs
+        tabs={[
+          { id: 'basics', label: '1. Basic Information' },
+          { id: 'pricing', label: '2. Pricing & Inventory' },
+          { id: 'variants', label: '3. Variant Options' },
+          { id: 'images', label: '4. Gallery Images' },
+          { id: 'specs', label: '5. Specifications & SEO' },
+        ]}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+      />
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-              Product Title *
-            </label>
-            <input
-              type="text"
+      {/* 1. Basics Tab */}
+      {activeTab === 'basics' && (
+        <Card className="p-6 space-y-5">
+          <Input
+            label="Product Title"
+            required
+            placeholder="e.g. ESP32-WROOM-32D Development Board"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setIsDirty(true);
+            }}
+            helperText="Clear and descriptive component name"
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="SKU Identifier"
               required
-              placeholder="e.g. ESP32 NodeMCU Wi-Fi + Bluetooth Dev Board (WROOM-32)"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+              placeholder="e.g. TC-ESP32-WROOM"
+              value={sku}
+              onChange={(e) => {
+                setSku(e.target.value);
+                setIsDirty(true);
+              }}
+              helperText="Unique uppercase inventory tracking code"
+            />
+
+            <Select
+              label="Hardware Category"
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setIsDirty(true);
+              }}
+              options={CATEGORIES}
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Textarea
+            label="Overview Description"
+            rows={4}
+            placeholder="Comprehensive description of the component, pin layout, and compatibility..."
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              setIsDirty(true);
+            }}
+          />
+        </Card>
+      )}
+
+      {/* 2. Pricing & Inventory Tab */}
+      {activeTab === 'pricing' && (
+        <Card className="p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Input
+              label="List Price (MRP) ₹"
+              type="number"
+              placeholder="599"
+              value={originalPrice}
+              onChange={(e) => {
+                setOriginalPrice(e.target.value);
+                setIsDirty(true);
+              }}
+              helperText="Maximum Retail Price"
+            />
+
+            <Input
+              label="Offer Price ₹"
+              type="number"
+              required
+              placeholder="449"
+              value={discountedPrice}
+              onChange={(e) => {
+                setDiscountedPrice(e.target.value);
+                setIsDirty(true);
+              }}
+              helperText="Active customer selling price"
+            />
+
+            <Input
+              label="Stock Quantity"
+              type="number"
+              required
+              placeholder="25"
+              value={stock}
+              onChange={(e) => {
+                setStock(e.target.value);
+                setIsDirty(true);
+              }}
+              helperText="Available inventory units"
+            />
+          </div>
+
+          <Input
+            label="Datasheet Reference URL"
+            placeholder="https://espressif.com/documentation/esp32_datasheet.pdf"
+            value={datasheetUrl}
+            onChange={(e) => {
+              setDatasheetUrl(e.target.value);
+              setIsDirty(true);
+            }}
+            helperText="Direct PDF link for maker engineering datasheets"
+          />
+        </Card>
+      )}
+
+      {/* 3. Variants Tab */}
+      {activeTab === 'variants' && (
+        <Card className="p-6 space-y-5">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Category *
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Configurable Hardware Variants</h3>
+              <p className="text-xs text-slate-500">Provide options such as solder state, header pins, or flash sizes</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleAddVariant} icon={Plus}>
+              Add Variant
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {variants.map((v, idx) => (
+              <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800">
+                <input
+                  type="text"
+                  placeholder="Variant Name"
+                  value={v.name}
+                  onChange={(e) => {
+                    const updated = [...variants];
+                    updated[idx].name = e.target.value;
+                    setVariants(updated);
+                    setIsDirty(true);
+                  }}
+                  className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-ring"
+                />
+                <input
+                  type="number"
+                  placeholder="Price Offset (₹)"
+                  value={v.priceOffset}
+                  onChange={(e) => {
+                    const updated = [...variants];
+                    updated[idx].priceOffset = Number(e.target.value);
+                    setVariants(updated);
+                    setIsDirty(true);
+                  }}
+                  className="w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-ring"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveVariant(idx)}
+                  className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* 4. Images Tab */}
+      {activeTab === 'images' && (
+        <Card className="p-6 space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Product Showcase Gallery (4 Slots)</h3>
+          <p className="text-xs text-slate-500">Upload high-resolution photography on white background</p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+            {images.map((imgUrl, slotIdx) => (
+              <div
+                key={slotIdx}
+                className="group relative aspect-square rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 p-2"
               >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
+                {imgUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imgUrl}
+                    alt={`Slot ${slotIdx + 1}`}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="text-center space-y-1">
+                    <ImageIcon className="w-6 h-6 text-slate-400 mx-auto" />
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Slot {slotIdx + 1}</span>
+                  </div>
+                )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Stock Quantity *
-              </label>
-              <input
-                type="number"
-                min="0"
-                required
-                placeholder="25"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
-              />
-            </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRefs[slotIdx]}
+                  className="hidden"
+                  onChange={(e) => handleImageUpload(slotIdx, e.target.files[0])}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRefs[slotIdx].current?.click()}
+                  className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold gap-1.5 transition-opacity"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{uploadingSlot === slotIdx ? 'Uploading...' : 'Replace'}</span>
+                </button>
+              </div>
+            ))}
           </div>
+        </Card>
+      )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                SKU / Part Number
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. TC-ESP32-DEV"
-                value={sku}
-                onChange={(e) => setSku(e.target.value.toUpperCase())}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Datasheet PDF Link (URL)
-              </label>
-              <input
-                type="url"
-                placeholder="https://..."
-                value={datasheetUrl}
-                onChange={(e) => setDatasheetUrl(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-mono text-xs"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-              Description *
-            </label>
-            <textarea
-              required
-              rows={4}
-              placeholder="Provide a comprehensive technical description of the component, operating parameters, and typical engineering applications..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-        </div>
-
-        {/* Pricing Card: Price and Discounted Price */}
-        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-              2. Price & Discounted Price
-            </h3>
-            {discountPercent !== null && (
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-600/50">
-                {discountPercent}% OFF • Save ₹{origNum - discNum}
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Regular Price / MRP (₹) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                required
-                placeholder="e.g. 499"
-                value={originalPrice}
-                onChange={(e) => setOriginalPrice(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
-              />
-              <p className="text-[11px] text-slate-400 mt-1">Strikethrough base price / MRP</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Discounted Price (₹) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                placeholder="e.g. 349 (leave empty if no discount)"
-                value={discountedPrice}
-                onChange={(e) => setDiscountedPrice(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
-              />
-              <p className="text-[11px] text-slate-400 mt-1">Actual price customer pays at checkout</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Hardware Specifications Card */}
-        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <Cpu className="w-4 h-4 text-cyan-400" /> 3. Hardware Technical Specifications
-            </h3>
-            <span className="text-xs text-slate-400">Maker & engineering parameters</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Operating Voltage
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 3.3V - 5V DC"
-                value={specifications.operatingVoltage}
-                onChange={(e) =>
-                  setSpecifications((prev) => ({ ...prev, operatingVoltage: e.target.value }))
-                }
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Pin Count / Header
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 30 Pins (2x15)"
-                value={specifications.pinCount}
-                onChange={(e) =>
-                  setSpecifications((prev) => ({ ...prev, pinCount: e.target.value }))
-                }
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Bus / Interface
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. I2C / SPI / UART / PWM"
-                value={specifications.interface}
-                onChange={(e) =>
-                  setSpecifications((prev) => ({ ...prev, interface: e.target.value }))
-                }
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Board Dimensions
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 51mm x 28mm"
-                value={specifications.dimensions}
-                onChange={(e) =>
-                  setSpecifications((prev) => ({ ...prev, dimensions: e.target.value }))
-                }
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                Weight
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 12g"
-                value={specifications.weight}
-                onChange={(e) =>
-                  setSpecifications((prev) => ({ ...prev, weight: e.target.value }))
-                }
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Features / Highlights Card */}
-        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-cyan-400" /> 4. Key Product Features & Highlights
-            </h3>
-            <span className="text-xs text-slate-400 font-mono">{features.length} Features Added</span>
-          </div>
-
+      {/* 5. Specs & Features Tab */}
+      {activeTab === 'specs' && (
+        <Card className="p-6 space-y-5">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Key Feature Bullet Points</h3>
           <div className="space-y-2">
             {features.map((feat, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between gap-3 p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl group"
-              >
-                <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                  <span className="w-5 h-5 rounded-md bg-cyan-950 border border-cyan-800/60 text-cyan-400 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                    {idx + 1}
-                  </span>
-                  <span className="text-xs text-slate-200 truncate">{feat}</span>
-                </div>
+              <div key={idx} className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900/80 rounded-xl text-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary shrink-0" />
+                <span className="flex-1 text-slate-700 dark:text-slate-300">{feat}</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveFeature(idx)}
-                  className="p-1.5 text-slate-500 hover:text-rose-400 transition"
-                  title="Remove feature"
+                  className="text-slate-400 hover:text-rose-500 p-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             ))}
+
+            <div className="flex gap-2 pt-1">
+              <input
+                type="text"
+                placeholder="Add a new technical feature bullet..."
+                value={newFeatureInput}
+                onChange={(e) => setNewFeatureInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}
+                className="flex-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-ring"
+              />
+              <Button size="sm" variant="secondary" onClick={handleAddFeature}>
+                Add
+              </Button>
+            </div>
           </div>
-
-          {/* Add Feature input */}
-          <div className="flex gap-2 pt-2">
-            <input
-              type="text"
-              placeholder="Type a key feature / specification bullet point..."
-              value={newFeatureInput}
-              onChange={(e) => setNewFeatureInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddFeature();
-                }
-              }}
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500"
-            />
-            <button
-              type="button"
-              onClick={handleAddFeature}
-              className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Images Per Product Card */}
-        <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <ImageIcon className="w-4 h-4 text-cyan-400" /> 4. Product Gallery (4 Images)
-            </h3>
-            <span className="text-xs text-slate-400">Slots 1 to 4</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {slotLabels.map((slot, index) => (
-              <div
-                key={index}
-                className="p-4 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-xs font-bold text-white">{slot.title}</h4>
-                    <p className="text-[10px] text-slate-400">{slot.desc}</p>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono font-bold">
-                    #{index + 1}
-                  </span>
-                </div>
-
-                {/* Thumbnail Preview */}
-                <div className="aspect-video w-full rounded-lg overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center relative group">
-                  {images[index] ? (
-                    <img
-                      src={images[index]}
-                      alt={slot.title}
-                      className="w-full h-full object-contain p-1"
-                      onError={(e) => {
-                        e.target.src =
-                          'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=400&q=80';
-                      }}
-                    />
-                  ) : (
-                    <div className="text-center text-slate-600 text-xs flex flex-col items-center gap-1">
-                      <ImageIcon className="w-6 h-6" />
-                      <span>No image selected</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Upload & URL Input */}
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="file"
-                      ref={fileInputRefs[index]}
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(index, e.target.files?.[0])}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRefs[index].current?.click()}
-                      disabled={uploadingSlot === index}
-                      className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition disabled:opacity-50"
-                    >
-                      <Upload className="w-3.5 h-3.5 text-cyan-400" />
-                      {uploadingSlot === index ? 'Uploading...' : 'Upload Image'}
-                    </button>
-                    {images[index] && (
-                      <button
-                        type="button"
-                        onClick={() => updateImageUrl(index, '')}
-                        className="p-2 text-slate-400 hover:text-rose-400 rounded-lg bg-slate-900 border border-slate-800"
-                        title="Clear image"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Or paste direct image URL (https://...)"
-                    value={images[index]}
-                    onChange={(e) => updateImageUrl(index, e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition disabled:opacity-50"
-        >
-          {isSubmitting ? (
-            'Publishing Hardware Listing...'
-          ) : (
-            <>
-              <Plus className="w-5 h-5" /> Publish Hardware Component Listing
-            </>
-          )}
-        </button>
-      </form>
+        </Card>
+      )}
     </div>
   );
 }
