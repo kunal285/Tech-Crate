@@ -15,11 +15,47 @@ import {
   Check,
   Banknote,
   QrCode,
+  User,
+  Info,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { BRAND } from '@/theme/tokens';
+
+const INDIAN_STATES = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Delhi NCR',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Jammu & Kashmir',
+  'Chandigarh',
+];
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -30,6 +66,7 @@ export default function CheckoutPage() {
   const [shippingAddress, setShippingAddress] = useState({
     fullName: '',
     phone: '',
+    email: '',
     street: '',
     city: '',
     state: 'Maharashtra',
@@ -40,17 +77,18 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('Razorpay'); // 'Razorpay' | 'COD'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
   const paymentOptions = [
     {
       id: 'Razorpay',
       title: 'UPI, Cards & NetBanking (Razorpay)',
-      description: 'Instant UPI (GPay/PhonePe), Debit/Credit Cards & NetBanking (Test Mode Active)',
+      description: 'Instant UPI (Google Pay, PhonePe, Paytm), RuPay / Debit / Credit Cards & NetBanking',
       icon: CreditCard,
     },
     {
       id: 'COD',
       title: 'Cash on Delivery (COD)',
-      description: 'Pay cash when your order is delivered at your doorstep',
+      description: 'Pay cash to delivery partner when your TechCrate parcel arrives',
       icon: Banknote,
     },
   ];
@@ -62,9 +100,10 @@ export default function CheckoutPage() {
         ...prev,
         fullName: prev.fullName || user.name || '',
         phone: prev.phone || user.phone || '',
+        email: prev.email || user.email || '',
         street: prev.street || user.address?.street || '',
         city: prev.city || user.address?.city || '',
-        state: prev.state || user.address?.state || '',
+        state: prev.state || user.address?.state || 'Maharashtra',
         pincode: prev.pincode || user.address?.pincode || '',
       }));
     }
@@ -76,7 +115,7 @@ export default function CheckoutPage() {
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
         <h2 className="text-xl font-bold text-slate-900">Your Cart is Empty</h2>
         <p className="text-xs text-slate-500 mt-1 mb-6">
-          Please add components to your cart before proceeding to checkout.
+          Please add hardware components to your cart before proceeding to checkout.
         </p>
         <Link
           href="/products"
@@ -115,7 +154,7 @@ export default function CheckoutPage() {
       !shippingAddress.state.trim() ||
       cleanPincode.length !== 6
     ) {
-      setError('Please provide a valid full name, 10-digit mobile number, street, city, state, and 6-digit pincode.');
+      setError('Please provide a valid full name, 10-digit mobile number, street, city, state, and 6-digit Indian PIN code.');
       return;
     }
 
@@ -136,7 +175,11 @@ export default function CheckoutPage() {
       // 2. Initialize checkout session (atomically reserves inventory)
       const checkoutPayload = {
         orderItems,
-        shippingAddress,
+        shippingAddress: {
+          ...shippingAddress,
+          phone: cleanPhone,
+          pincode: cleanPincode,
+        },
         paymentMethod,
         couponCode: coupon?.code || undefined,
         redirect_url: `${window.location.origin}/payment/success`,
@@ -150,39 +193,10 @@ export default function CheckoutPage() {
         throw new Error(sessionData?.message || 'Failed to initialize checkout.');
       }
 
-      // Branch 1: AutoUPI Hosted Gateway
-      if (paymentMethod === 'UPI') {
-        if (sessionData.payment_url && !sessionData.is_sandbox) {
-          // Redirect to genuine AutoUPI hosted payment page
-          window.location.href = sessionData.payment_url;
-          return;
-        }
-
-        // Sandbox / Local fallback for seamless testing
-        if (sessionData.is_sandbox || !sessionData.payment_url) {
-          try {
-            const verifyRes = await api.post('/payments/verify', {
-              session_id: sessionData.session_id,
-              simulate: true,
-            });
-            const finalId = verifyRes.data?.final_order_id || verifyRes.data?.order_id || sessionData.session_id;
-            clearCart();
-            router.push(`/orders/${encodeURIComponent(finalId)}?status=paid&success=true`);
-            return;
-          } catch {
-            router.push(`/payment/success?session_id=${sessionData.session_id}`);
-            return;
-          }
-        }
-
-        window.location.href = sessionData.payment_url;
-        return;
-      }
-
-      // Branch 2: Razorpay In-Page Checkout
+      // Branch 1: Razorpay In-Page Checkout
       if (paymentMethod === 'Razorpay') {
         if (!sessionData.razorpay_order_id || !sessionData.razorpay_key_id) {
-          throw new Error('Razorpay gateway configuration is missing. Please select AutoUPI or COD.');
+          throw new Error('Razorpay gateway configuration is missing. Please select COD or try again.');
         }
 
         // Dynamically load Razorpay checkout script
@@ -202,19 +216,18 @@ export default function CheckoutPage() {
             amount: sessionData.razorpay_amount || Math.round(Number(sessionData.amount) * 100),
             currency: sessionData.currency || 'INR',
             name: 'Tech Crate',
-            description: 'Tech Crate Test Order',
+            description: 'Tech Crate Prototyping Hardware Order',
             image: '/logo.png',
             order_id: sessionData.razorpay_order_id,
             notes: {
               session_id: sessionData.session_id,
-              environment: 'test',
             },
             prefill: {
               name: sessionData.prefill?.name || shippingAddress.fullName,
               email: sessionData.prefill?.email || user?.email || '',
               contact: sessionData.prefill?.contact || shippingAddress.phone,
             },
-            theme: { color: '#0284C7' },
+            theme: { color: BRAND.navy },
             handler: async function (response) {
               try {
                 const verifyRes = await api.post('/payments/verify', {
@@ -252,10 +265,10 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Branch 3: Cash on Delivery (COD)
+      // Branch 2: Cash on Delivery (COD)
       clearCart();
       const finalOrderId = sessionData.final_order_id || sessionData.order_id || sessionData.session_id;
-      router.push(`/orders/${encodeURIComponent(finalOrderId)}?success=true`);
+      router.push(`/orders/${encodeURIComponent(finalOrderId)}?status=cod_placed&success=true`);
     } catch (err) {
       console.warn('[Checkout Error]:', err?.response?.data?.message || err?.message);
       setError(
@@ -268,7 +281,6 @@ export default function CheckoutPage() {
     }
   };
 
-
   return (
     <div className="space-y-6 pb-16">
       {/* Page Heading */}
@@ -280,15 +292,16 @@ export default function CheckoutPage() {
           Checkout & Payment
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Enter your delivery destination and select your verified payment method.
+          Enter your domestic shipping destination and select your verified payment method.
         </p>
       </div>
 
+      {/* Checkout Progress Stepper */}
       <div className="grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
         {[
-          ['1', 'Delivery address', true],
-          ['2', 'Payment', true],
-          ['3', 'Confirmation', false],
+          ['1', 'Delivery Address', true],
+          ['2', 'Payment Method', true],
+          ['3', 'Order Confirmation', false],
         ].map(([step, title, active]) => (
           <div
             key={step}
@@ -298,7 +311,7 @@ export default function CheckoutPage() {
           >
             <span
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${
-                active ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-400'
+                active ? 'bg-[#032762] text-white' : 'bg-slate-100 text-slate-400'
               }`}
             >
               {step}
@@ -310,6 +323,34 @@ export default function CheckoutPage() {
         ))}
       </div>
 
+      {/* Account Status Pill */}
+      {isAuthenticated ? (
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-emerald-600" />
+            <span>
+              Signed in as <strong>{user?.name}</strong> ({user?.email})
+            </span>
+          </div>
+          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded">
+            Verified Customer
+          </span>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Already have an account?{' '}
+              <Link href="/account/login?redirect=/checkout" className="font-bold underline text-brand-primary">
+                Sign in
+              </Link>{' '}
+              to use saved addresses & sync order tracking.
+            </span>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -320,19 +361,19 @@ export default function CheckoutPage() {
       <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Delivery Address & Payment Method (8 cols) */}
         <div className="lg:col-span-8 space-y-5">
-          {/* 1. Delivery Address Card (Matches Mobile Delivery Address Card) */}
+          {/* 1. Delivery Address Card */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 border-b border-slate-100 p-5 pb-3">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
               <MapPin className="w-4 h-4 text-sky-600" />
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                Delivery Address
+                Delivery Address (India Only)
               </h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                  Full Name *
+                  Recipient Full Name *
                 </label>
                 <input
                   type="text"
@@ -347,7 +388,7 @@ export default function CheckoutPage() {
 
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                  Mobile Number (for updates) *
+                  10-Digit Mobile Number (Courier OTP) *
                 </label>
                 <input
                   type="tel"
@@ -357,13 +398,13 @@ export default function CheckoutPage() {
                   value={shippingAddress.phone}
                   onChange={handleInputChange}
                   placeholder="e.g. 9876543210"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-brand-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-brand-primary font-mono"
                 />
               </div>
 
               <div className="sm:col-span-2 space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                  Street / Campus / Hostel Address *
+                  Street / Campus / Hostel / Flat Address *
                 </label>
                 <input
                   type="text"
@@ -371,14 +412,14 @@ export default function CheckoutPage() {
                   required
                   value={shippingAddress.street}
                   onChange={handleInputChange}
-                  placeholder="e.g. Hostel 12, Room 402, Campus Block"
+                  placeholder="e.g. Hostel 12, Room 402, Engineering College Campus"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-brand-primary"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                  City *
+                  City / Town *
                 </label>
                 <input
                   type="text"
@@ -393,22 +434,25 @@ export default function CheckoutPage() {
 
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                  State *
+                  State / Union Territory *
                 </label>
-                <input
-                  type="text"
+                <select
                   name="state"
-                  required
                   value={shippingAddress.state}
                   onChange={handleInputChange}
-                  placeholder="e.g. Maharashtra"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-brand-primary"
-                />
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 outline-none focus:border-brand-primary cursor-pointer"
+                >
+                  {INDIAN_STATES.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                  Pincode *
+                  6-Digit Indian PIN Code *
                 </label>
                 <input
                   type="text"
@@ -418,15 +462,15 @@ export default function CheckoutPage() {
                   value={shippingAddress.pincode}
                   onChange={handleInputChange}
                   placeholder="e.g. 411001"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-brand-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-brand-primary font-mono max-w-xs"
                 />
               </div>
             </div>
           </div>
 
-          {/* 2. Payment Method Card (Matches Mobile Payment Selector) */}
+          {/* 2. Payment Method Card */}
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2 p-5 pb-3 border-b border-slate-100">
               <CreditCard className="w-4 h-4 text-sky-600" />
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
                 Payment Method
@@ -466,15 +510,15 @@ export default function CheckoutPage() {
                   <>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-extrabold text-slate-900">UPI, Cards & NetBanking (Razorpay)</p>
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                        Test Mode Active
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                        Secure RBI Gateway
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Razorpay in-page checkout supports UPI (GPay, PhonePe, Paytm, BHIM), Debit/Credit Cards, and NetBanking across 50+ banks.
+                    <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                      Instant checkout via Google Pay, PhonePe, Paytm, BHIM UPI QR, Debit/Credit Cards (RuPay, Visa, Mastercard) & NetBanking across 50+ Indian banks.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {['UPI (GPay / PhonePe)', 'Credit Card', 'Debit Card', 'NetBanking', 'Wallets', 'EMI'].map((m) => (
+                      {['UPI (GPay / PhonePe)', 'RuPay Cards', 'Credit Card', 'NetBanking', 'Wallets'].map((m) => (
                         <span
                           key={m}
                           className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600"
@@ -488,10 +532,10 @@ export default function CheckoutPage() {
                   <>
                     <p className="text-sm font-extrabold text-slate-900">Cash on Delivery (COD)</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Pay cash to the delivery partner when your TechCrate order arrives at your doorstep.
+                      Pay cash to the courier delivery partner when your parcel is delivered at your doorstep or campus gate.
                     </p>
                     <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-xs text-emerald-800 font-medium">
-                      Exact change appreciated upon package delivery.
+                      Exact cash change is recommended upon parcel arrival.
                     </div>
                   </>
                 )}
@@ -499,11 +543,11 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* 3. Delivery & Guarantee Card */}
+          {/* 3. Delivery & Guarantee Trust Strip */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm flex items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
             <p className="text-xs text-slate-600 leading-relaxed">
-              All shipments are bubble-wrapped with anti-static ESD packaging and tracked dispatch.
+              All electronic components are packed in electrostatic-discharge (ESD) safe shielding and dispatched via verified Indian couriers.
             </p>
           </div>
         </div>
@@ -531,7 +575,7 @@ export default function CheckoutPage() {
 
             <div className="pt-3 border-t border-slate-100 space-y-2 text-xs">
               <div className="flex items-center justify-between text-slate-600">
-                <span>Subtotal</span>
+                <span>Items Subtotal</span>
                 <span className="font-semibold text-slate-900">
                   ₹{Number(subtotal).toLocaleString('en-IN')}
                 </span>
@@ -552,7 +596,7 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex items-center justify-between text-slate-600">
-                <span>Delivery</span>
+                <span>Shipping Fee</span>
                 <span className="font-semibold">
                   {deliveryFee === 0 ? (
                     <span className="text-emerald-600 font-bold">FREE</span>
@@ -582,7 +626,7 @@ export default function CheckoutPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#032762] hover:bg-[#034697] text-white font-bold text-xs uppercase tracking-wider shadow-sm transition-all active:scale-95 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-sm transition-all active:scale-95 disabled:opacity-50"
               style={{ backgroundColor: BRAND.navy }}
             >
               {isSubmitting ? (

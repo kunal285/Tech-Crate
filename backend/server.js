@@ -110,10 +110,20 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Apply general API Rate Limiter
-app.use('/api/', apiLimiter);
+// Standardized Response & Request-ID Tracking Middleware
+const responseEnvelope = require('./middleware/responseEnvelope');
+app.use(responseEnvelope);
 
-// Routes
+// Apply general API Rate Limiter
+app.use(['/api/', '/api/v1/'], apiLimiter);
+
+// ── Versioned Routes (/api/v1) ─────────────────────────────────────────────
+app.use('/api/v1', require('./routes/v1Router'));
+
+// ── Backward-Compatible Routes (/api for legacy apps) ──────────────────────
+app.get('/api/app-version', (req, res) => {
+  return res.redirect(307, '/api/v1/app-version');
+});
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));

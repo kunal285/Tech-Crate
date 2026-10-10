@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck, Truck, CreditCard, Award, Heart, Bot } from 'lucide-react';
+import { ShieldCheck, Truck, CreditCard, Award, Heart, HelpCircle, MapPin, Phone, Mail } from 'lucide-react';
 import { CATEGORIES } from '@/lib/constants';
 import { BRAND } from '@/theme/tokens';
 
@@ -11,7 +11,7 @@ export default function Footer() {
   return (
     <footer className="bg-white border-t border-slate-200 mt-16 text-slate-600">
       {/* 1. Value Badges Banner */}
-      <div className="border-b border-slate-100 py-6 bg-slate-50/50">
+      <div className="border-b border-slate-100 py-6 bg-slate-50/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
             <div className="flex items-center gap-3">
@@ -61,8 +61,8 @@ export default function Footer() {
                 <Award className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900">Student Friendly</h4>
-                <p className="text-[11px] text-slate-500">Free schematics & code</p>
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900">7-Day Warranty</h4>
+                <p className="text-[11px] text-slate-500">Free replacement support</p>
               </div>
             </div>
           </div>
@@ -72,7 +72,7 @@ export default function Footer() {
       {/* 2. Main Footer Links */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
-          {/* Brand Intro */}
+          {/* Brand Intro & Business Disclosures */}
           <div className="lg:col-span-2 space-y-3">
             <Link href="/" className="inline-flex items-center gap-2">
               <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0">
@@ -83,7 +83,6 @@ export default function Footer() {
                   height={32}
                   className="object-contain"
                   onError={(e) => {
-                    // Fallback handled gracefully
                     e.currentTarget.style.display = 'none';
                   }}
                 />
@@ -96,25 +95,46 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm leading-relaxed">
-              Everything you need to build robotics, IoT projects, and electronics prototypes.
-              Delivering authentic development boards, sensors, and maker kits across India.
+              India&apos;s single-vendor online hardware store for authentic microcontrollers, sensor breakout boards, robotics modules, and IoT DIY kits.
             </p>
-            <div className="pt-1">
-              <Link
-                href="/ai-assistant"
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-sm"
-                style={{ backgroundColor: BRAND.navy }}
-              >
-                <Bot className="w-3.5 h-3.5 text-brand-cyan" />
-                <span>AI Shopping Assistant</span>
-              </Link>
+
+            <div className="pt-1 text-xs text-slate-500 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>Pune Innovation Park, Maharashtra, India 411001</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <a href="mailto:support@techcrate.in" className="hover:text-brand-primary">support@techcrate.in</a>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>+91 98765 43210 (Mon–Sat 9AM–7PM IST)</span>
+              </div>
+            </div>
+
+            {/* Accepted Indian Payment Badges */}
+            <div className="pt-2">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">
+                Supported Indian Payment Methods
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {['UPI / GPay / PhonePe', 'RuPay & Debit Cards', 'NetBanking', 'Cash on Delivery'].map((m) => (
+                  <span
+                    key={m}
+                    className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                  >
+                    {m}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Quick Categories */}
+          {/* Column 2: Categories */}
           <div>
             <h3 className="text-xs font-bold text-slate-900 tracking-wider uppercase mb-3">
-              Categories
+              Hardware Catalog
             </h3>
             <ul className="space-y-2 text-xs sm:text-sm">
               {CATEGORIES.slice(1, 6).map((c) => (
@@ -129,50 +149,16 @@ export default function Footer() {
               ))}
               <li>
                 <Link href="/products" className="text-brand-primary font-bold hover:underline">
-                  View All Hardware →
+                  Browse All Hardware →
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Maker Education */}
+          {/* Column 3: Customer Care & Orders */}
           <div>
             <h3 className="text-xs font-bold text-slate-900 tracking-wider uppercase mb-3">
-              DIY Projects Hub
-            </h3>
-            <ul className="space-y-2 text-xs sm:text-sm">
-              <li>
-                <Link href="/projects" className="text-slate-600 hover:text-brand-primary transition-colors">
-                  IoT Project Kits
-                </Link>
-              </li>
-              <li>
-                <Link href="/projects" className="text-slate-600 hover:text-brand-primary transition-colors">
-                  Robotics & Automation
-                </Link>
-              </li>
-              <li>
-                <Link href="/projects" className="text-slate-600 hover:text-brand-primary transition-colors">
-                  Circuit Schematics
-                </Link>
-              </li>
-              <li>
-                <Link href="/projects" className="text-slate-600 hover:text-brand-primary transition-colors">
-                  Source Code Downloads
-                </Link>
-              </li>
-              <li>
-                <Link href="/projects" className="text-slate-600 hover:text-brand-primary transition-colors">
-                  Student Starter Kits
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Policies & Support */}
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 tracking-wider uppercase mb-3">
-              Help & Policies
+              Customer Support
             </h3>
             <ul className="space-y-2 text-xs sm:text-sm">
               <li>
@@ -181,34 +167,80 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/cart" className="text-slate-600 hover:text-brand-primary transition-colors">
-                  Shopping Cart
+                <Link href="/account" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  My Account & Invoices
                 </Link>
               </li>
               <li>
-                <Link href="/account" className="text-slate-600 hover:text-brand-primary transition-colors">
-                  My Account
+                <Link href="/cart" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Cart & Checkout
                 </Link>
               </li>
-              {/* <li>
-                <a
-                  href={process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:5173'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-slate-600 hover:text-brand-primary transition-colors flex items-center gap-1 font-medium"
-                >
-                  Admin Portal ↗
-                </a>
-              </li> */}
+              <li>
+                <Link href="/contact" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Contact Support Desk
+                </Link>
+              </li>
+              <li>
+                <Link href="/projects" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  DIY Project Tutorials
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 4: Compliance & Legal */}
+          <div>
+            <h3 className="text-xs font-bold text-slate-900 tracking-wider uppercase mb-3">
+              Policies & Legal
+            </h3>
+            <ul className="space-y-2 text-xs sm:text-sm">
+              <li>
+                <Link href="/policies/shipping" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Shipping & Delivery Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/policies/returns" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Replacement & Returns
+                </Link>
+              </li>
+              <li>
+                <Link href="/policies/cancellation" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Cancellation Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/policies/warranty" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Warranty & Quality Guarantee
+                </Link>
+              </li>
+              <li>
+                <Link href="/policies/privacy" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/policies/terms" className="text-slate-600 hover:text-brand-primary transition-colors">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/policies/grievance" className="text-emerald-700 font-bold hover:underline">
+                  Grievance Redressal
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="border-t border-slate-100 mt-10 pt-5 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-3">
-          <p>© {new Date().getFullYear()} Tech Crate. Built for Indian makers & engineers.</p>
+        {/* Bottom Bar with Statutory Disclosures */}
+        <div className="border-t border-slate-100 mt-10 pt-5 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-3">
+          <p>
+            © {new Date().getFullYear()} Tech Crate. Single-vendor online store operating in India. Prices inclusive of 18% GST.
+          </p>
           <div className="flex items-center gap-1 text-slate-400">
-            Designed with <Heart className="w-3.5 h-3.5 text-red-500 fill-current mx-0.5" /> for Maker Community
+            Engineered with <Heart className="w-3.5 h-3.5 text-red-500 fill-current mx-0.5" /> for the Indian Maker Community
           </div>
         </div>
       </div>
