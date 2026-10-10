@@ -28,7 +28,7 @@ export default function PrivacyPolicyPage() {
         <section className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
           <h2 className="text-lg font-bold text-white">2. Payment Security</h2>
           <p>
-            All digital UPI and card transactions are processed securely through RBI-compliant payment gateways (AutoUPI / PayCow / UPI Rails). TechCrate does not store, log, or have access to your bank account passwords, UPI MPINs, or debit card credentials.
+            All digital UPI, netbanking, and card transactions are processed securely through RBI-compliant payment gateways (Razorpay / UPI Rails). TechCrate does not store, log, or have access to your bank account passwords, UPI MPINs, or debit card credentials.
           </p>
         </section>
 

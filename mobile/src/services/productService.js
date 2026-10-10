@@ -23,7 +23,7 @@ const productService = {
 
   // Search products
   searchProducts: async (query, filters = {}) => {
-    return await apiGet('/products/search', {q: query, ...filters});
+    return await apiGet('/products', {keyword: query, q: query, ...filters});
   },
 
   // Get products by category

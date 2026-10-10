@@ -59,7 +59,9 @@ class AutoUpiService {
         '[Auto UPI Gateway] Sandbox mode active: generating mock payment gateway response.'
       );
       const mockTxnId = `UPI_${orderId || Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
-      const mockPaymentUrl = `${this.baseUrl}/pay?token=mock_sandbox_${mockTxnId}&amount=${amount}`;
+      const mockPaymentUrl = successRedirectUrl.includes('?')
+        ? `${successRedirectUrl}&session_id=${orderId}&mock_txn=${mockTxnId}&status=paid`
+        : `${successRedirectUrl}?session_id=${orderId}&mock_txn=${mockTxnId}&status=paid`;
       const mockUpiIntent = `upi://pay?pa=techcrate@upi&pn=TechCrate&tr=${mockTxnId}&tn=Order_${orderId}&am=${amount}&cu=INR`;
 
       return {

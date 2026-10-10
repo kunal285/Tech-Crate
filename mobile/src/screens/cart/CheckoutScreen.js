@@ -34,7 +34,7 @@ export default function CheckoutScreen({ route, navigation }) {
   const items = useCartStore((state) => state.items || []);
   const clearCart = useCartStore((state) => state.clearCart);
 
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [paymentMethod, setPaymentMethod] = useState('Razorpay');
   const [loading, setLoading] = useState(false);
 
   const [address, setAddress] = useState({
@@ -83,7 +83,7 @@ export default function CheckoutScreen({ route, navigation }) {
       return;
     }
 
-    if (paymentMethod === 'UPI') {
+    if (paymentMethod === 'UPI' || paymentMethod === 'Razorpay') {
       await createOnlineOrder();
       return;
     }
@@ -113,34 +113,64 @@ export default function CheckoutScreen({ route, navigation }) {
           state: address.state.trim() || 'India',
           pincode: address.pincode.trim(),
         },
-        paymentMethod: 'UPI',
+        paymentMethod,
       };
 
-      // Use unified initiateCheckout endpoint (creates Razorpay order on backend)
-      const res = await orderService.initiateCheckout({
-        ...orderData,
-      });
-
+      // Initiate checkout session on backend (atomically reserves inventory)
+      const res = await orderService.initiateCheckout(orderData);
       const sessionData = res.data || res;
 
       if (!sessionData || sessionData.success === false) {
         throw new Error(sessionData?.message || 'Failed to initialize checkout. Please try again.');
       }
 
-      if (!sessionData.razorpay_order_id || !sessionData.razorpay_key_id) {
-        throw new Error('Payment gateway configuration is missing. Please contact support.');
+      // Branch 1: AutoUPI Gateway (Hosted page or UPI Intent)
+      if (paymentMethod === 'UPI') {
+        if (sessionData.payment_url) {
+          try {
+            await paymentService.openPaymentGateway(sessionData.payment_url);
+          } catch (linkErr) {
+            console.warn('[Open Gateway URL Warning]', linkErr.message);
+          }
+        }
+
+        navigation.replace('PaymentProcessing', {
+          order_id: sessionData.session_id,
+          orderId: sessionData.session_id,
+        });
+        return;
       }
 
-      // Open Razorpay in-app payment modal (no browser redirect needed)
-      const rzpResponse = await paymentService.openRazorpayCheckout(sessionData);
+      // Branch 2: Razorpay in-app modal
+      if (paymentMethod === 'Razorpay') {
+        if (!sessionData.razorpay_order_id || !sessionData.razorpay_key_id) {
+          throw new Error('Razorpay gateway configuration is missing. Please select another method.');
+        }
 
-      // rzpResponse = { razorpay_payment_id, razorpay_order_id, razorpay_signature }
-      // Navigate to processing screen — backend webhook will finalize the order
-      navigation.replace('PaymentProcessing', {
-        order_id: sessionData.session_id,
-        orderId: sessionData.session_id,
-        razorpay_payment_id: rzpResponse.razorpay_payment_id,
-      });
+        const rzpResponse = await paymentService.openRazorpayCheckout(sessionData);
+
+        let verifiedOrderId = sessionData.session_id;
+        try {
+          const verifyResult = await paymentService.verifyPayment({
+            razorpay_payment_id: rzpResponse.razorpay_payment_id,
+            razorpay_order_id: rzpResponse.razorpay_order_id,
+            razorpay_signature: rzpResponse.razorpay_signature,
+            session_id: sessionData.session_id,
+          });
+          if (verifyResult && (verifyResult.final_order_id || verifyResult.order_id)) {
+            verifiedOrderId = verifyResult.final_order_id || verifyResult.order_id;
+          }
+        } catch (verifyErr) {
+          console.warn('[Mobile Payment Verification Warning]', verifyErr.message);
+        }
+
+        navigation.replace('PaymentProcessing', {
+          order_id: verifiedOrderId,
+          orderId: verifiedOrderId,
+          razorpay_payment_id: rzpResponse.razorpay_payment_id,
+        });
+        return;
+      }
 
     } catch (error) {
       Alert.alert('Order Placement Error', error.message || 'Error processing your order');
@@ -310,10 +340,10 @@ export default function CheckoutScreen({ route, navigation }) {
 
           {[
             {
-              id: 'UPI',
-              title: 'Auto UPI Gateway',
-              subtitle: 'Google Pay, PhonePe, Paytm, QR (autoupigateway.com)',
-              isUpi: true,
+              id: 'Razorpay',
+              title: 'UPI, Cards & NetBanking (Razorpay)',
+              subtitle: 'UPI (GPay/PhonePe), Credit/Debit Cards & NetBanking (Test Mode Active)',
+              isUpi: false,
             },
             {
               id: 'COD',
@@ -371,8 +401,8 @@ export default function CheckoutScreen({ route, navigation }) {
           <View style={styles.selectedPaymentInfo}>
             <ShieldCheck size={16} color="#15803D" />
             <Text style={styles.selectedPaymentInfoText}>
-              {paymentMethod === 'UPI'
-                ? 'You will continue to the secure UPI gateway after confirming your order.'
+              {paymentMethod === 'Razorpay'
+                ? 'Secure test-mode transaction via Razorpay. UPI, Cards & NetBanking supported.'
                 : 'Pay the delivery partner in cash when your order arrives.'}
             </Text>
           </View>

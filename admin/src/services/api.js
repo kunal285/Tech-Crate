@@ -1,9 +1,13 @@
 import axios from 'axios';
 
-const rawUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const defaultBackend = import.meta.env.PROD
+  ? 'https://tech-crate.onrender.com/api'
+  : 'http://localhost:5000/api';
+
+const rawUrl = import.meta.env.VITE_API_BASE_URL || defaultBackend;
 
 const normalizeApiUrl = (url) => {
-  if (!url) return 'http://localhost:5000/api';
+  if (!url) return defaultBackend;
   const trimmed = url.trim().replace(/\/+$/, '');
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 };

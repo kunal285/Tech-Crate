@@ -1,53 +1,49 @@
 # Payment Gateway & Order Lifecycle Feature Specification
 
-This document details payment processing with **Auto UPI Gateway** (`https://autoupigateway.com`), cart/wishlist management, and order status transitions.
+This document details payment processing with **Razorpay** (`https://razorpay.com`), cart/wishlist management, and order status transitions.
 
 ---
 
-## 💳 Auto UPI Payment Gateway Integration (`controllers/paymentController.js` & `services/autoUpiService.js`)
+## 💳 Razorpay Payment Gateway Integration (`controllers/paymentController.js` & `services/razorpayService.js`)
 
-TechCrate utilizes **Auto UPI Gateway** (`https://autoupigateway.com`) for direct, instant UPI transactions, intent links, QR codes, and automated webhooks.
+TechCrate utilizes **Razorpay** (`https://razorpay.com`) for secure, seamless checkout supporting UPI, Credit/Debit Cards, NetBanking, and Wallets.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
-    participant Mobile as Mobile App / Web App
+    participant Client as Mobile App / Web App
     participant API as Express Backend API
-    participant AutoUPI as Auto UPI Gateway (autoupigateway.com)
+    participant Razorpay as Razorpay Gateway (razorpay.com)
 
-    User->>Mobile: Review cart and submit checkout
-    Mobile->>API: POST /api/orders { items, shippingAddress, paymentMethod }
-    API-->>Mobile: Pending order details page { orderId, total, status: Pending }
-    User->>Mobile: Tap Pay Now on order details
-    Mobile->>API: POST /api/payments/create-order { orderId }
-    API->>AutoUPI: POST https://autoupigateway.com/api/create-order { user_token, amount, order_id }
-    AutoUPI-->>API: { status: true, payment_url, upi_intent_url, qr_code }
-    API-->>Mobile: { success: true, paymentUrl, upiIntentUrl, qrData, orderId }
-    Mobile->>User: Launch UPI Intent (GPay/PhonePe/Paytm) or Display QR Code
-    User->>AutoUPI: Complete Payment in UPI App
-    AutoUPI->>API: POST /api/payments/webhook (Instant Status Notification)
-    Mobile->>API: POST /api/payments/verify { orderId }
-    API->>AutoUPI: POST https://autoupigateway.com/api/check-order-status
-    AutoUPI-->>API: { status: "COMPLETED", isPaid: true }
-    API->>API: Mark Order as Paid (`isPaid: true`, `orderStatus: "Processing"`)
-    API-->>Mobile: Payment Verified & Order Confirmed
+    User->>Client: Review cart and submit checkout
+    Client->>API: POST /api/checkout/initiate { items, shippingAddress, paymentMethod }
+    API->>Razorpay: Create Order { amount, currency, receipt }
+    Razorpay-->>API: { razorpay_order_id, amount, currency, key_id }
+    API-->>Client: { session_id, razorpay_order_id, razorpay_key_id, amount }
+    Client->>Razorpay: Open Razorpay Checkout Modal
+    User->>Razorpay: Complete Payment (UPI / Card / NetBanking)
+    Razorpay-->>Client: { razorpay_payment_id, razorpay_order_id, razorpay_signature }
+    Client->>API: POST /api/payments/verify { razorpay_payment_id, razorpay_order_id, razorpay_signature, session_id }
+    API->>API: Verify HMAC-SHA256 signature
+    API->>API: Finalize Order (`isPaid: true`, `orderStatus: "Processing"`)
+    API-->>Client: Order Confirmed
 ```
 
 ---
 
 ## ⚙️ Environment Configuration
 
-Set up the following variables in your `.env` file:
+Set up the following variables in your `backend/.env` file:
 
 ```env
-# Auto UPI Gateway (https://autoupigateway.com)
-AUTO_UPI_GATEWAY_URL=https://autoupigateway.com
-AUTO_UPI_USER_TOKEN=your_merchant_user_token_here
-AUTO_UPI_WEBHOOK_SECRET=your_webhook_secret_here
+# Razorpay Payment Gateway
+RAZORPAY_KEY_ID=rzp_test_your_key_id_here
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret_here
+RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret_here
 ```
 
-In development or staging environments where `AUTO_UPI_USER_TOKEN` is unset, the system seamlessly uses a built-in sandbox mock mode for offline testing.
+In development environments where keys are unset or using placeholders, the system uses a built-in sandbox mock mode for offline testing.
 
 ---
 

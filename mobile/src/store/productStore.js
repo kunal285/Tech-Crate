@@ -30,11 +30,12 @@ const useProductStore = create((set, get) => ({
       const cached = await AsyncStorage.getItem(STORAGE_KEYS.PRODUCTS_CACHE);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
+          const activeOnly = parsed.filter(p => !p.isArchived && p.status !== 'archived');
           set({
-            products: parsed,
-            trending: parsed.slice(0, 4),
-            recommended: parsed.slice(2, 6),
+            products: activeOnly,
+            trending: activeOnly.slice(0, 4),
+            recommended: activeOnly.slice(2, 6),
           });
         }
       }
@@ -47,9 +48,10 @@ const useProductStore = create((set, get) => ({
     try {
       const result = await productService.getProducts(params);
       if (result.success) {
-        const items = Array.isArray(result.data)
+        const rawItems = Array.isArray(result.data)
           ? result.data
           : result.data?.products || [];
+        const items = rawItems.filter(p => !p.isArchived && p.status !== 'archived');
         
         const newProducts = append ? [...get().products, ...items] : items;
         set(state => ({
@@ -127,23 +129,33 @@ const useProductStore = create((set, get) => ({
   // Fetch single product
   fetchProduct: async id => {
     set({ isLoading: true, currentProduct: null, error: null });
-    // Check fallback/cached list first
-    const existing = get().products.find(p => (p._id || p.id) === id);
-    if (existing) {
-      set({ currentProduct: existing, isLoading: false });
-    }
 
     try {
       const result = await productService.getProduct(id);
-      if (result.success && result.data?.product) {
-        set({ currentProduct: result.data.product, isLoading: false });
-        return result;
+      if (result.success && result.data) {
+        const prod = result.data.product || (result.data._id ? result.data : null);
+        if (prod) {
+          set({ currentProduct: prod, isLoading: false });
+          return { success: true, data: { product: prod } };
+        }
+      } else if (result.status === 404 || (result.data && result.data.message?.includes('not found'))) {
+        // Product was deleted or archived on backend: purge from catalog & cache so it stays deleted
+        const remaining = get().products.filter(p => (p._id || p.id) !== id);
+        set({ products: remaining, currentProduct: null, isLoading: false, error: 'Product not found' });
+        AsyncStorage.setItem(STORAGE_KEYS.PRODUCTS_CACHE, JSON.stringify(remaining)).catch(() => {});
+        return { success: false, message: 'Product not found' };
       }
-    } catch {}
+    } catch (e) {
+      // Offline/network failure
+    }
 
+    // Only fallback if offline/network failed and existing item was found in cache
+    const existing = get().products.find(p => (p._id || p.id) === id);
     if (existing) {
+      set({ currentProduct: existing, isLoading: false });
       return { success: true, data: { product: existing } };
     }
+
     set({ error: 'Product not found', isLoading: false });
     return { success: false };
   },

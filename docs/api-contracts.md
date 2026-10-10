@@ -234,3 +234,59 @@ All endpoints are rooted under `/api`.
 - `PUT /api/orders/:id/status` — Update order fulfillment state (`Processing`, `Shipped`, `Delivered`, `Cancelled`).
 - `GET /api/admin/users` — Registered customer and seller list.
 - `GET /api/admin/categories` & `POST /api/admin/categories` — Categories management.
+
+---
+
+## 6. Payment & Gateway Endpoints (`/api/payment`)
+
+### POST `/api/payment/orders/create` (or `/api/payment/create-order`)
+- **Access**: Protected (`customer`)
+- **Request Body**:
+  ```json
+  {
+    "orderId": "66a01...",
+    "gateway": "autoupi" // or "razorpay"
+  }
+  ```
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "paymentUrl": "https://...",
+    "orderId": "66a01...",
+    "amount": 668.2,
+    "gateway": "autoupi",
+    "gatewayOrderId": "UPI_..."
+  }
+  ```
+
+### POST `/api/payment/verify`
+- **Access**: Protected (`customer`, `admin`)
+- **Request Body**:
+  ```json
+  {
+    "orderId": "66a01...",
+    "session_id": "mock_session_..."
+  }
+  ```
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "paymentStatus": "Paid",
+    "orderId": "66a01..."
+  }
+  ```
+
+### GET `/api/payment/:order_id/status`
+- **Access**: Protected
+- **Response `200 OK`**: Current server-authoritative payment status (`Paid`, `Pending`, `Failed`).
+
+### POST `/api/payment/webhook`
+- **Access**: Public / Gateway Webhook (verified cryptographically via HMAC / Secret token)
+- **Response `200 OK`**: Handled idempotently; transitions order payment state and releases/confirms inventory.
+
+### POST `/api/payment/reconcile`
+- **Access**: Protected (`admin` only)
+- **Manual reconciliation audit tool for payment mismatches**.
+

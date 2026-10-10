@@ -56,6 +56,11 @@ const paymentService = {
     return await apiGet(`/payments/${order_id}/status`);
   },
 
+  // Verify payment signature with backend
+  verifyPayment: async (verificationData) => {
+    return await apiPost('/payments/verify', verificationData);
+  },
+
   /**
    * Open Razorpay in-app checkout modal.
    * @param {Object} sessionData - Response from POST /api/checkout/initiate
@@ -68,8 +73,8 @@ const paymentService = {
         description: 'Tech Crate Order Payment',
         image: 'https://tech-crate.onrender.com/logo.png',
         currency: sessionData.currency || 'INR',
-        key: sessionData.razorpay_key_id,
-        amount: sessionData.amount, // already in paise from backend
+        key: sessionData.razorpay_key_id || 'rzp_test_Tm3Zrmb9gAWjnG',
+        amount: sessionData.razorpay_amount || Math.round(Number(sessionData.amount) * 100),
         order_id: sessionData.razorpay_order_id,
         name: 'Tech Crate',
         prefill: {

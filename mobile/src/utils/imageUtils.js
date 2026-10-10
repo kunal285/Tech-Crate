@@ -7,6 +7,9 @@ export const getBaseServerUrl = () => {
     const cleanUrl = API_BASE_URL.replace(/\/api\/?$/, '');
     if (cleanUrl) return cleanUrl;
   }
+  if (typeof __DEV__ !== 'undefined' && !__DEV__) {
+    return 'https://tech-crate.onrender.com';
+  }
   // Fallback for Android emulator vs iOS/web
   return Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
 };

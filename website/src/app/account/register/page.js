@@ -64,8 +64,8 @@ function RegisterContent() {
   return (
     <div className="max-w-md w-full mx-auto py-10 px-4">
       <div className="text-center mb-6">
-        <Link href="/" className="inline-block relative w-12 h-12 mb-2">
-          <Image src="/logo.png" alt="Tech Crate" fill sizes="48px" priority className="object-contain" />
+        <Link href="/" className="inline-flex items-center justify-center w-12 h-12 mb-2">
+          <Image src="/logo.png" alt="Tech Crate" width={48} height={48} priority className="object-contain" />
         </Link>
         <h1
           className="text-2xl font-black tracking-tight"

@@ -109,8 +109,20 @@ const productSchema = new mongoose.Schema(
       index: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
+
+// Virtual property 'image' for backward compatibility with frontend/mobile
+productSchema.virtual('image').get(function () {
+  if (this.images && this.images.length > 0) {
+    return this.images[0];
+  }
+  return '';
+});
 
 // Performance & Search Indexes
 productSchema.index({ title: 'text', description: 'text', sku: 'text' });

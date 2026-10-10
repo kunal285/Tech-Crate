@@ -70,3 +70,11 @@ jest.mock('lucide-react-native', () => {
 // Mock react-native-linear-gradient
 jest.mock('react-native-linear-gradient', () => 'LinearGradient');
 
+// Mock react-native-razorpay
+jest.mock('react-native-razorpay', () => ({
+  open: jest.fn().mockResolvedValue({ razorpay_payment_id: 'pay_test_123' }),
+  on: jest.fn(),
+  off: jest.fn(),
+}));
+
+

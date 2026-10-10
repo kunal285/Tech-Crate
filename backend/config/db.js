@@ -81,7 +81,7 @@ const connectDB = async () => {
 
   try {
     const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 2000,
+      serverSelectionTimeoutMS: 10000,
     });
     console.log(`[MongoDB] Connected: ${conn.connection.host}`);
     await populateLiveData();

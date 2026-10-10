@@ -175,21 +175,19 @@ Content-Type: application/json
 ```json
 {
   "success": true,
-  "id": "UPI_ORDER_991823",
+  "order_id": "ORD-20261010-ABCD",
+  "razorpay_order_id": "order_xyz123",
+  "razorpay_key_id": "rzp_test_...",
   "amount": 149900,
-  "amountInRupees": 1499,
+  "amount_display": 1499,
   "currency": "INR",
-  "paymentGateway": "AutoUPI",
-  "gatewayUrl": "https://autoupigateway.com",
-  "paymentUrl": "https://autoupigateway.com/pay?token=...",
-  "upiIntentUrl": "upi://pay?pa=techcrate@upi&tr=...",
-  "qrData": "upi://pay?pa=techcrate@upi&tr=..."
+  "status": "PAYMENT_INITIATED"
 }
 ```
 
 ---
 
-### 2. Verify Auto UPI Gateway Payment *(Protected)*
+### 2. Verify Razorpay Payment *(Protected)*
 ```http
 POST /api/payments/verify
 Authorization: Bearer <JWT_USER_TOKEN>
@@ -198,17 +196,20 @@ Content-Type: application/json
 **Request Body**:
 ```json
 {
-  "orderId": "651f8a...",
-  "txnId": "UPI_ORDER_991823"
+  "session_id": "651f8a...",
+  "razorpay_payment_id": "pay_xyz456",
+  "razorpay_order_id": "order_xyz123",
+  "razorpay_signature": "9ef803..."
 }
 ```
 **Response (200 OK)**:
 ```json
 {
   "success": true,
-  "message": "Payment verified successfully via Auto UPI Gateway (autoupigateway.com) and recorded on backend.",
-  "paymentGateway": "AutoUPI",
-  "gatewayUrl": "https://autoupigateway.com"
+  "isPaid": true,
+  "status": "paid",
+  "order_id": "ORD-20261010-ABCD",
+  "final_order_id": "ORD-20261010-ABCD"
 }
 ```
 

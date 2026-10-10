@@ -32,7 +32,7 @@ const paymentSchema = new mongoose.Schema(
     },
     gateway: {
       type: String,
-      default: 'AutoUPI',
+      default: 'Razorpay',
     },
     amount: {
       type: Number,

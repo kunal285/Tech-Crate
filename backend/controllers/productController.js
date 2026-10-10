@@ -5,7 +5,8 @@ const Order = require('../models/Order');
 // @route GET /api/products
 const getProducts = async (req, res) => {
   try {
-    const { keyword, category, page, limit, includeArchived, status } = req.query;
+    const { keyword, q, category, page, limit, includeArchived, status } = req.query;
+    const searchTerm = (keyword || q || '').trim();
     let query = {};
 
     // By default, exclude archived/soft-deleted products from public catalog
@@ -17,11 +18,11 @@ const getProducts = async (req, res) => {
       query.status = status;
     }
 
-    if (keyword) {
+    if (searchTerm) {
       query.$or = [
-        { title: { $regex: keyword, $options: 'i' } },
-        { description: { $regex: keyword, $options: 'i' } },
-        { sku: { $regex: keyword, $options: 'i' } },
+        { title: { $regex: searchTerm, $options: 'i' } },
+        { description: { $regex: searchTerm, $options: 'i' } },
+        { sku: { $regex: searchTerm, $options: 'i' } },
       ];
     }
 

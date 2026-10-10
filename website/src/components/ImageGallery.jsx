@@ -7,6 +7,7 @@ import { BRAND } from '@/theme/tokens';
 
 export default function ImageGallery({
   images = [],
+  image = '',
   title = 'TechCrate Product',
   discountPercent = 0,
   isLowStock = false,
@@ -14,10 +15,16 @@ export default function ImageGallery({
 }) {
   const fallback = 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80';
 
+  // Normalize image sources from either images array or single image string
+  const rawList =
+    Array.isArray(images) && images.length > 0
+      ? images
+      : (image ? [image] : (typeof images === 'string' && images ? [images] : []));
+
   // Clean image list up to 5 slots
   const validImages =
-    Array.isArray(images) && images.filter(Boolean).length > 0
-      ? images.filter(Boolean).slice(0, 5)
+    rawList.filter(Boolean).length > 0
+      ? rawList.filter(Boolean).slice(0, 5)
       : [fallback];
 
   const [selectedIndex, setSelectedIndex] = useState(0);

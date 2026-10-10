@@ -1,10 +1,14 @@
+const crypto = require('crypto');
 const CheckoutSession = require('../models/CheckoutSession');
+const Order = require('../models/Order');
 const Product = require('../models/Product');
 const ProjectKit = require('../models/ProjectKit');
 const Coupon = require('../models/Coupon');
+const Cart = require('../models/Cart');
+const autoUpiService = require('../services/autoUpiService');
 const razorpayService = require('../services/razorpayService');
 
-// @desc Initiate a checkout session — reserves inventory and creates a Razorpay order
+// @desc Initiate a checkout session — reserves inventory and creates an AutoUPI / Razorpay order
 // @route POST /api/checkout/initiate
 // @access Private
 const initiateCheckout = async (req, res) => {
@@ -125,43 +129,110 @@ const initiateCheckout = async (req, res) => {
 
     await session.save();
 
-    // ── 5. COD path — bypass Razorpay ─────────────────────────────────────────
+    // ── 5. COD path — finalize order immediately ──────────────────────────────
     if (paymentMethod === 'COD') {
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const randomHex = crypto.randomBytes(2).toString('hex').toUpperCase();
+      const newOrderId = `ORD-${dateStr}-${randomHex}`;
+
+      const codOrder = new Order({
+        order_id: newOrderId,
+        user: req.user._id,
+        orderItems: validatedItems,
+        shippingAddress: session.shippingAddress,
+        paymentMethod: 'COD',
+        itemsPrice,
+        taxPrice,
+        shippingPrice,
+        totalPrice,
+        isPaid: false,
+        orderStatus: 'Placed',
+        paymentResult: {
+          id: `COD_${session._id}`,
+          status: 'PENDING',
+          updateTime: new Date().toISOString(),
+        },
+      });
+
+      const savedCodOrder = await codOrder.save();
+
+      session.sessionStatus = 'Completed';
+      session.order_id = savedCodOrder.order_id;
+      await session.save();
+
+      // Clear user cart for placed COD order
+      await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] }).catch(() => {});
+
       return res.status(201).json({
         success: true,
         session_id: session._id,
+        order_id: savedCodOrder.order_id,
+        final_order_id: savedCodOrder.order_id,
         payment_method: 'COD',
         amount: totalPrice,
         currency: 'INR',
-        message: 'COD order session created. Confirm on the next step.',
+        message: 'Order placed successfully with Cash on Delivery.',
       });
     }
 
-    // ── 6. Create Razorpay Order ───────────────────────────────────────────────
-    const rzpOrder = await razorpayService.createOrder({
-      orderId: session._id.toString(),
-      amount: totalPrice,
-      currency: 'INR',
-      notes: {
-        customer_name: session.shippingAddress.fullName,
-        customer_phone: session.shippingAddress.phone,
-      },
-    });
+    // ── 6. Create Online Payment Gateway Order ───────────────────────────────
+    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const backendBase = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
 
-    // Store Razorpay order ID in session for webhook matching
-    session.payment_id = rzpOrder.razorpay_order_id;
+    let autoUpiOrder = { isSandbox: false };
+    let rzpOrder = null;
+
+    if (paymentMethod === 'Razorpay') {
+      try {
+        rzpOrder = await razorpayService.createOrder({
+          orderId: session._id.toString(),
+          amount: totalPrice,
+          currency: 'INR',
+          notes: {
+            session_id: session._id.toString(),
+            customer_name: session.shippingAddress.fullName,
+          },
+        });
+        if (rzpOrder?.razorpay_order_id) {
+          session.payment_id = rzpOrder.razorpay_order_id;
+        }
+      } catch (err) {
+        console.warn('[Razorpay order creation error]', err.message);
+      }
+    } else {
+      // AutoUPI hosted gateway
+      autoUpiOrder = await autoUpiService.createOrder({
+        orderId: session._id.toString(),
+        amount: totalPrice,
+        customerName: session.shippingAddress.fullName,
+        customerEmail: req.user.email || 'customer@techcrate.com',
+        customerMobile: session.shippingAddress.phone,
+        redirectUrl: redirect_url || `${frontendBase}/payment/success?session_id=${session._id}`,
+        failureUrl: failure_url || `${frontendBase}/payment/failed?session_id=${session._id}`,
+        webhookUrl: `${backendBase}/api/webhooks/payment`,
+      });
+      session.payment_id = autoUpiOrder.gatewayOrderId || `UPI_${session._id}`;
+      session.payment_url = autoUpiOrder.paymentUrl || null;
+    }
+
     await session.save();
 
     return res.status(201).json({
       success: true,
       session_id: session._id,
-      razorpay_order_id: rzpOrder.razorpay_order_id,
-      razorpay_key_id: rzpOrder.key_id,
-      amount: rzpOrder.amount,          // in paise
-      amount_display: totalPrice,       // in rupees for display
-      currency: rzpOrder.currency,
-      is_sandbox: rzpOrder.isSandbox || false,
-      // Prefill data for Razorpay checkout modal
+      payment_method: paymentMethod,
+      gateway: paymentMethod === 'Razorpay' ? 'Razorpay' : 'AutoUPI',
+      payment_url: autoUpiOrder.paymentUrl || null,
+      upi_intent_url: autoUpiOrder.upiIntentUrl || null,
+      qr_data: autoUpiOrder.qrData || null,
+      gateway_order_id: autoUpiOrder.gatewayOrderId || null,
+      amount: totalPrice,
+      amount_display: totalPrice,
+      currency: 'INR',
+      is_sandbox: paymentMethod === 'Razorpay' ? (rzpOrder?.isSandbox || false) : (autoUpiOrder.isSandbox || false),
+      razorpay_order_id: rzpOrder?.razorpay_order_id,
+      razorpay_key_id: rzpOrder?.key_id || process.env.RAZORPAY_KEY_ID || 'rzp_test_Tm3Zrmb9gAWjnG',
+      razorpay_amount: rzpOrder?.amount || Math.round(Number(totalPrice) * 100),
       prefill: {
         name: session.shippingAddress.fullName,
         email: req.user.email || '',

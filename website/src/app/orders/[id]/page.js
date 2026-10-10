@@ -243,7 +243,13 @@ export default function OrderDetailPage() {
             return (
               <div key={idx} className="py-3 flex items-center gap-3.5">
                 <div className="relative w-14 h-14 rounded-xl bg-slate-50 border border-slate-200 shrink-0 overflow-hidden">
-                  <Image src={img} alt={item.title || 'Part'} fill className="object-contain p-1.5" />
+                  <Image
+                    src={img}
+                    alt={item.title || 'Part'}
+                    fill
+                    sizes="56px"
+                    className="object-contain p-1.5"
+                  />
                 </div>
                 <div className="flex-1">
                   <h4 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-1">

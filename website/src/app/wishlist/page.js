@@ -76,7 +76,13 @@ export default function WishlistPage() {
                 className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col justify-between gap-3 hover:border-slate-300 transition-all"
               >
                 <div className="relative aspect-square w-full rounded-xl bg-slate-50 border border-slate-100 overflow-hidden">
-                  <Image src={image} alt={item.title || 'Product'} fill className="object-contain p-2" />
+                  <Image
+                    src={image}
+                    alt={item.title || 'Product'}
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    className="object-contain p-2"
+                  />
                   <button
                     onClick={() => handleRemove(id)}
                     className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 text-slate-400 hover:text-rose-600 transition-colors shadow-2xs"

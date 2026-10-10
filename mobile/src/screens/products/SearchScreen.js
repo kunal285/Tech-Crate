@@ -19,10 +19,43 @@ import { CATEGORIES } from '../../constants';
 
 const POPULAR_SEARCHES = ['Arduino', 'ESP32', 'Raspberry Pi', 'Sensors', 'Robotics Kit', 'IoT'];
 
+const EmptyState = ({ query, onSelectSearch }) => (
+  <View style={styles.emptyState}>
+    {query.length === 0 ? (
+      <>
+        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+          <Search size={56} color={Colors.primary} />
+        </View>
+        <Text style={styles.emptyTitle}>Search TechCrate</Text>
+        <Text style={styles.emptyDesc}>Find components, project kits, and tutorials</Text>
+
+        <Text style={styles.suggestionTitle}>Popular Searches</Text>
+        <View style={styles.chips}>
+          {POPULAR_SEARCHES.map((s, i) => (
+            <TouchableOpacity
+              key={i}
+              style={styles.chip}
+              onPress={() => onSelectSearch(s)}>
+              <Text style={styles.chipText}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </>
+    ) : (
+      <>
+        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+          <Frown size={56} color={Colors.textMuted} />
+        </View>
+        <Text style={styles.emptyTitle}>No results for "{query}"</Text>
+        <Text style={styles.emptyDesc}>Try different keywords or browse categories</Text>
+      </>
+    )}
+  </View>
+);
+
 const SearchScreen = ({ navigation, route }) => {
   const [query, setQuery] = useState(route?.params?.query || '');
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [priceRange, setPriceRange] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const inputRef = useRef(null);
 
@@ -43,40 +76,6 @@ const SearchScreen = ({ navigation, route }) => {
   const navigateToProduct = product => {
     navigation.navigate('ProductDetail', { productId: product._id, product });
   };
-
-  const EmptyState = () => (
-    <View style={styles.emptyState}>
-      {query.length === 0 ? (
-        <>
-          <View style={{ alignItems: 'center', marginBottom: 16 }}>
-            <Search size={56} color={Colors.primary} />
-          </View>
-          <Text style={styles.emptyTitle}>Search TechCrate</Text>
-          <Text style={styles.emptyDesc}>Find components, project kits, and tutorials</Text>
-
-          <Text style={styles.suggestionTitle}>Popular Searches</Text>
-          <View style={styles.chips}>
-            {POPULAR_SEARCHES.map((s, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.chip}
-                onPress={() => { setQuery(s); search(s); }}>
-                <Text style={styles.chipText}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </>
-      ) : (
-        <>
-          <View style={{ alignItems: 'center', marginBottom: 16 }}>
-            <Frown size={56} color={Colors.textMuted} />
-          </View>
-          <Text style={styles.emptyTitle}>No results for "{query}"</Text>
-          <Text style={styles.emptyDesc}>Try different keywords or browse categories</Text>
-        </>
-      )}
-    </View>
-  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -170,7 +169,7 @@ const SearchScreen = ({ navigation, route }) => {
           numColumns={2}
           contentContainerStyle={styles.resultsList}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={<EmptyState />}
+          ListEmptyComponent={<EmptyState query={query} onSelectSearch={handleSearch} />}
           renderItem={({ item }) => (
             <ProductCard
               product={item}

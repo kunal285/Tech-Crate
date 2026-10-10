@@ -328,6 +328,7 @@ export default function ProjectDetailPage() {
                     src={circuitDiagramUrl}
                     alt="Circuit diagram"
                     fill
+                    sizes="(max-width: 1024px) 100vw, 66vw"
                     className="object-contain bg-slate-50"
                   />
                 </div>

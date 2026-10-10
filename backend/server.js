@@ -95,7 +95,7 @@ app.use(
 );
 
 // Body Parsers with payload size limits (protect against large body Denial of Service)
-// Captures rawBody buffer for cryptographic payment webhook signature verification (PayCow / AutoUPI)
+// Captures rawBody buffer for cryptographic payment webhook signature verification (Razorpay)
 app.use(
   express.json({
     limit: '1mb',
@@ -127,9 +127,8 @@ app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/posters', require('./routes/posterRoutes'));
 app.use('/api/banners', require('./routes/posterRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
-app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use(['/api/payments', '/api/payment'], require('./routes/paymentRoutes'));
 app.use('/api/webhooks', require('./routes/paymentRoutes'));
-app.use(['/autoupi-webhook', '/api/autoupi-webhook'], require('./routes/paymentRoutes'));
 app.use(['/payment-success', '/payment-failed'], require('./routes/paymentRoutes'));
 
 // Interactive Swagger / OpenAPI Documentation
@@ -174,6 +173,10 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`[TechCrate Server] Running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[TechCrate Server] Running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  });
+}
+
+module.exports = app;

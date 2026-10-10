@@ -28,7 +28,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [stockFilter, setStockFilter] = useState('all'); // 'all', 'in-stock', 'low-stock', 'out-of-stock'
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'archived'
+  const [statusFilter, setStatusFilter] = useState('active'); // 'active' (default catalog), 'all', 'archived'
   const [currentPage, setCurrentPage] = useState(1);
 
   // Deletion Confirmation Modal State

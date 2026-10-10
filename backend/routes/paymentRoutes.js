@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createPaymentOrder,
+  verifyPayment,
   getPaymentStatus,
   handlePaymentWebhook,
   reconcilePaymentManual,
@@ -26,17 +27,16 @@ router.post('/webhook', handlePaymentWebhook);
 router.post('/webhooks/payment', handlePaymentWebhook);
 router.post('/payment', handlePaymentWebhook);
 router.post('/', handlePaymentWebhook);
-router.post('/autoupi/webhook', handlePaymentWebhook);
 
 // 2. Order Payment Initiation endpoints (Strictly protected by authentication & rate limiting)
 router.post('/orders/create', protect, checkoutLimiter, createPaymentOrder);
 router.post('/create-order', protect, checkoutLimiter, createPaymentOrder);
-router.post('/autoupi/create-order', protect, checkoutLimiter, createPaymentOrder);
 
 // 3. Status Verification endpoints (Server-Authoritative Source of Truth)
 router.get('/:order_id/status', protect, getPaymentStatus);
 router.get('/status/:order_id', protect, getPaymentStatus);
-router.post('/verify', protect, getPaymentStatus);
+router.post('/verify', protect, verifyPayment);
+router.post('/razorpay/verify', protect, verifyPayment);
 
 // 4. Admin Privileged Manual Reconciliation (Requires Admin Role & Audit Logging)
 router.post('/reconcile', protect, authorizeRoles('admin'), reconcilePaymentManual);

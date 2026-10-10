@@ -79,7 +79,8 @@ export default function Footer() {
                 <Image
                   src="/logo.png"
                   alt="Tech Crate"
-                  fill
+                  width={32}
+                  height={32}
                   className="object-contain"
                   onError={(e) => {
                     // Fallback handled gracefully

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -29,7 +29,7 @@ export default function PaymentResultScreen({ route, navigation }) {
   const [paymentDetails, setPaymentDetails] = useState(null);
   const clearCart = useCartStore((state) => state.clearCart);
 
-  const verifyBackendPayment = async () => {
+  const verifyBackendPayment = useCallback(async () => {
     if (!targetOrderId) {
       setLoading(false);
       setServerVerifiedStatus('failed');
@@ -57,11 +57,11 @@ export default function PaymentResultScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [targetOrderId, clearCart]);
 
   useEffect(() => {
     verifyBackendPayment();
-  }, [targetOrderId]);
+  }, [verifyBackendPayment]);
 
   if (loading) {
     return (

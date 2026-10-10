@@ -180,9 +180,28 @@ const getMyOrders = async (req, res) => {
 // @route GET /api/orders/:id
 const getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
+    const paramId = req.params.id;
+    const isObjectId = typeof paramId === 'string' && /^[0-9a-fA-F]{24}$/.test(paramId);
+
+    let order = await Order.findOne({
+      $or: [
+        ...(isObjectId ? [{ _id: paramId }] : []),
+        { order_id: paramId },
+      ],
+    })
       .populate('user', 'name email phone')
       .populate('orderItems.product');
+
+    // If still not found, check if parameter was a CheckoutSession
+    if (!order && isObjectId) {
+      const CheckoutSession = require('../models/CheckoutSession');
+      const session = await CheckoutSession.findById(paramId);
+      if (session && session.order_id) {
+        order = await Order.findOne({ order_id: session.order_id })
+          .populate('user', 'name email phone')
+          .populate('orderItems.product');
+      }
+    }
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -202,11 +221,19 @@ const getOrderById = async (req, res) => {
   }
 };
 
-// @desc Cancel an order (Allowed only if Pending or Processing; restores inventory)
+// @desc Cancel an order (Allowed only if Pending, Placed, or Processing; restores inventory)
 // @route PUT /api/orders/:id/cancel
 const cancelOrder = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const mongoose = require('mongoose');
+    const validMongoId = mongoose.Types.ObjectId.isValid(req.params.id) ? req.params.id : null;
+    const order = await Order.findOne({
+      $or: [
+        ...(validMongoId ? [{ _id: validMongoId }] : []),
+        { order_id: req.params.id },
+      ],
+    });
+
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -218,7 +245,7 @@ const cancelOrder = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to cancel this order' });
     }
 
-    if (!['Pending', 'Processing'].includes(order.orderStatus)) {
+    if (!['Pending', 'Placed', 'Processing'].includes(order.orderStatus)) {
       return res.status(400).json({
         message: `Cannot cancel an order that is already '${order.orderStatus}'.`,
       });

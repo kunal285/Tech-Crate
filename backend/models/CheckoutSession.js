@@ -38,7 +38,7 @@ const checkoutSessionSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['UPI', 'Card', 'NetBanking', 'COD'],
+    enum: ['UPI', 'Card', 'NetBanking', 'COD', 'Razorpay'],
     default: 'UPI',
   },
   currency: { type: String, default: 'INR' },
@@ -48,6 +48,7 @@ const checkoutSessionSchema = new mongoose.Schema({
   totalPrice: { type: Number, required: true },
   discountApplied: { type: Number, default: 0 },
   coupon: { type: String },
+  order_id: { type: String },
   
   sessionStatus: {
     type: String,

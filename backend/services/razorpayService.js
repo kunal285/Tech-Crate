@@ -10,13 +10,20 @@ class RazorpayService {
     this.isLive =
       Boolean(this.keyId) &&
       Boolean(this.keySecret) &&
-      this.keyId !== 'rzp_test_your_key_here';
+      !this.keyId.includes('your_key') &&
+      !this.keySecret.includes('your_razorpay') &&
+      (this.keyId.startsWith('rzp_test_') || this.keyId.startsWith('rzp_live_'));
 
     if (this.isLive) {
-      this.instance = new Razorpay({
-        key_id: this.keyId,
-        key_secret: this.keySecret,
-      });
+      try {
+        this.instance = new Razorpay({
+          key_id: this.keyId,
+          key_secret: this.keySecret,
+        });
+      } catch (err) {
+        console.error('[Razorpay Initialization Error]', err.message);
+        this.isLive = false;
+      }
     }
   }
 

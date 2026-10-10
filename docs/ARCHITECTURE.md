@@ -18,8 +18,7 @@ graph TD
         Express["⚡ Express.js REST API Server (:5000)<br/>(Controllers, Middleware, Validators, Services)"]
         AuthLayer["🔐 Auth & Security Layer<br/>(JWT, Roles: admin/seller/customer, Zod, Rate Limiter)"]
         FirebaseSvcs["🔥 Firebase Services<br/>(Firebase Admin SDK, FCM Messaging, Auth)"]
-        CloudinaryMedia["🖼️ Cloudinary CDN<br/>(Media Storage & URL Delivery)"]
-        AutoUPI["💳 Payment Gateway<br/>(AutoUPI / Webhook Server-to-Server)"]
+        Razorpay["💳 Payment Gateway<br/>(Razorpay / Webhooks & Signature Verification)"]
     end
 
     subgraph Data Tier
@@ -33,7 +32,7 @@ graph TD
     Express --> AuthLayer
     Express --> FirebaseSvcs
     Express --> CloudinaryMedia
-    Express --> AutoUPI
+    Express --> Razorpay
     Express --> MongoDB
 ```
 

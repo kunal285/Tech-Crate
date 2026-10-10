@@ -37,20 +37,20 @@ export default function CheckoutPage() {
     country: 'India',
   });
 
-  const [paymentMethod, setPaymentMethod] = useState('UPI'); // 'UPI' | 'COD'
+  const [paymentMethod, setPaymentMethod] = useState('Razorpay'); // 'Razorpay' | 'COD'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const paymentOptions = [
     {
-      id: 'UPI',
-      title: 'UPI',
-      description: 'Google Pay, PhonePe, Paytm and other UPI apps',
-      icon: QrCode,
+      id: 'Razorpay',
+      title: 'UPI, Cards & NetBanking (Razorpay)',
+      description: 'Instant UPI (GPay/PhonePe), Debit/Credit Cards & NetBanking (Test Mode Active)',
+      icon: CreditCard,
     },
     {
       id: 'COD',
-      title: 'Cash on Delivery',
-      description: 'Pay when your order is delivered',
+      title: 'Cash on Delivery (COD)',
+      description: 'Pay cash when your order is delivered at your doorstep',
       icon: Banknote,
     },
   ];
@@ -103,16 +103,19 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Validate address fields
+    // Validate address fields (10 digit phone, 6 digit pincode)
+    const cleanPhone = shippingAddress.phone.replace(/\D/g, '');
+    const cleanPincode = shippingAddress.pincode.replace(/\D/g, '');
+
     if (
       !shippingAddress.fullName.trim() ||
-      !shippingAddress.phone.trim() ||
+      cleanPhone.length !== 10 ||
       !shippingAddress.street.trim() ||
       !shippingAddress.city.trim() ||
       !shippingAddress.state.trim() ||
-      !shippingAddress.pincode.trim()
+      cleanPincode.length !== 6
     ) {
-      setError('Please provide all required shipping address fields accurately.');
+      setError('Please provide a valid full name, 10-digit mobile number, street, city, state, and 6-digit pincode.');
       return;
     }
 
@@ -130,13 +133,12 @@ export default function CheckoutPage() {
         itemType: item.itemType || 'product',
       }));
 
-      // 2. Initialize checkout session
+      // 2. Initialize checkout session (atomically reserves inventory)
       const checkoutPayload = {
         orderItems,
         shippingAddress,
         paymentMethod,
         couponCode: coupon?.code || undefined,
-        // The backend will handle appending necessary query params or we can use the AutoUPI redirect params
         redirect_url: `${window.location.origin}/payment/success`,
         failure_url: `${window.location.origin}/payment/failed`,
       };
@@ -148,9 +150,39 @@ export default function CheckoutPage() {
         throw new Error(sessionData?.message || 'Failed to initialize checkout.');
       }
 
+      // Branch 1: AutoUPI Hosted Gateway
       if (paymentMethod === 'UPI') {
+        if (sessionData.payment_url && !sessionData.is_sandbox) {
+          // Redirect to genuine AutoUPI hosted payment page
+          window.location.href = sessionData.payment_url;
+          return;
+        }
+
+        // Sandbox / Local fallback for seamless testing
+        if (sessionData.is_sandbox || !sessionData.payment_url) {
+          try {
+            const verifyRes = await api.post('/payments/verify', {
+              session_id: sessionData.session_id,
+              simulate: true,
+            });
+            const finalId = verifyRes.data?.final_order_id || verifyRes.data?.order_id || sessionData.session_id;
+            clearCart();
+            router.push(`/orders/${encodeURIComponent(finalId)}?status=paid&success=true`);
+            return;
+          } catch {
+            router.push(`/payment/success?session_id=${sessionData.session_id}`);
+            return;
+          }
+        }
+
+        window.location.href = sessionData.payment_url;
+        return;
+      }
+
+      // Branch 2: Razorpay In-Page Checkout
+      if (paymentMethod === 'Razorpay') {
         if (!sessionData.razorpay_order_id || !sessionData.razorpay_key_id) {
-          throw new Error('Payment gateway configuration error. Please try again.');
+          throw new Error('Razorpay gateway configuration is missing. Please select AutoUPI or COD.');
         }
 
         // Dynamically load Razorpay checkout script
@@ -166,26 +198,44 @@ export default function CheckoutPage() {
 
         await new Promise((resolve, reject) => {
           const options = {
-            key: sessionData.razorpay_key_id,
-            amount: sessionData.amount,
+            key: sessionData.razorpay_key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_Tm3Zrmb9gAWjnG',
+            amount: sessionData.razorpay_amount || Math.round(Number(sessionData.amount) * 100),
             currency: sessionData.currency || 'INR',
             name: 'Tech Crate',
-            description: 'Order Payment',
+            description: 'Tech Crate Test Order',
             image: '/logo.png',
             order_id: sessionData.razorpay_order_id,
+            notes: {
+              session_id: sessionData.session_id,
+              environment: 'test',
+            },
             prefill: {
               name: sessionData.prefill?.name || shippingAddress.fullName,
               email: sessionData.prefill?.email || user?.email || '',
               contact: sessionData.prefill?.contact || shippingAddress.phone,
             },
-            theme: { color: '#1E3A5F' },
-            handler: function (response) {
-              // Payment success — navigate to success page
-              clearCart();
-              router.push(
-                `/payment/success?razorpay_payment_id=${response.razorpay_payment_id}&session_id=${sessionData.session_id}&status=paid`
-              );
-              resolve(response);
+            theme: { color: '#0284C7' },
+            handler: async function (response) {
+              try {
+                const verifyRes = await api.post('/payments/verify', {
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                  session_id: sessionData.session_id,
+                });
+
+                const finalOrderId = verifyRes.data?.final_order_id || verifyRes.data?.order_id || sessionData.session_id;
+                clearCart();
+                router.push(`/orders/${encodeURIComponent(finalOrderId)}?status=paid&success=true`);
+                resolve(response);
+              } catch (verifyErr) {
+                console.warn('[Razorpay verify fallback to polling]', verifyErr);
+                clearCart();
+                router.push(
+                  `/payment/success?razorpay_payment_id=${response.razorpay_payment_id}&session_id=${sessionData.session_id}&status=paid`
+                );
+                resolve(response);
+              }
             },
             modal: {
               ondismiss: () => reject(new Error('Payment was cancelled.')),
@@ -202,9 +252,10 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Cash on delivery
+      // Branch 3: Cash on Delivery (COD)
       clearCart();
-      router.push(`/orders/${sessionData.session_id}?success=true`);
+      const finalOrderId = sessionData.final_order_id || sessionData.order_id || sessionData.session_id;
+      router.push(`/orders/${encodeURIComponent(finalOrderId)}?success=true`);
     } catch (err) {
       console.warn('[Checkout Error]:', err?.response?.data?.message || err?.message);
       setError(
@@ -411,29 +462,37 @@ export default function CheckoutPage() {
                 })}
               </div>
               <div className="flex-1 p-5">
-                {paymentMethod === 'UPI' ? (
+                {paymentMethod === 'Razorpay' ? (
                   <>
-                    <p className="text-sm font-extrabold text-slate-900">Pay securely with UPI</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-extrabold text-slate-900">UPI, Cards & NetBanking (Razorpay)</p>
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                        Test Mode Active
+                      </span>
+                    </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      You will be redirected to the secure Auto UPI gateway after placing the order.
+                      Razorpay in-page checkout supports UPI (GPay, PhonePe, Paytm, BHIM), Debit/Credit Cards, and NetBanking across 50+ banks.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {['Google Pay', 'PhonePe', 'Paytm', 'BHIM'].map((app) => (
+                      {['UPI (GPay / PhonePe)', 'Credit Card', 'Debit Card', 'NetBanking', 'Wallets', 'EMI'].map((m) => (
                         <span
-                          key={app}
+                          key={m}
                           className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600"
                         >
-                          {app}
+                          {m}
                         </span>
                       ))}
                     </div>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-extrabold text-slate-900">Cash on Delivery</p>
+                    <p className="text-sm font-extrabold text-slate-900">Cash on Delivery (COD)</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Pay the delivery partner in cash when your TechCrate order arrives.
+                      Pay cash to the delivery partner when your TechCrate order arrives at your doorstep.
                     </p>
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-xs text-emerald-800 font-medium">
+                      Exact change appreciated upon package delivery.
+                    </div>
                   </>
                 )}
               </div>
@@ -513,6 +572,12 @@ export default function CheckoutPage() {
                 ₹{Number(totalAmount).toLocaleString('en-IN')}
               </span>
             </div>
+
+            {discountAmount > 0 && (
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-center text-xs font-bold text-emerald-700">
+                🎉 You will save ₹{Number(discountAmount).toLocaleString('en-IN')} on this order!
+              </div>
+            )}
 
             <button
               type="submit"

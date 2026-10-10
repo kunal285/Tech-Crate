@@ -25,7 +25,7 @@ export default function Payments() {
     <div className="p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white tracking-tight">Payment Transactions & Gateway Logs</h1>
-        <p className="text-sm text-slate-400">Monitor Auto UPI Gateway (autoupigateway.com) & Instant UPI transactions securely</p>
+        <p className="text-sm text-slate-400">Monitor Razorpay & online transactions securely</p>
       </div>
 
       <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">

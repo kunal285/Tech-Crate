@@ -40,7 +40,7 @@ const LazyImage = ({
     setLoading(true);
     setError(false);
     imageOpacity.setValue(0);
-  }, [resolvedUri, source]);
+  }, [resolvedUri, source, imageOpacity]);
 
   // Pulsing skeleton animation loop while loading
   useEffect(() => {
@@ -65,7 +65,7 @@ const LazyImage = ({
     return () => {
       if (animationLoop) animationLoop.stop();
     };
-  }, [loading, showSkeleton]);
+  }, [loading, showSkeleton, skeletonOpacity]);
 
   const handleLoadSuccess = () => {
     setLoading(false);
