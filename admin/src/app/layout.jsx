@@ -1,4 +1,5 @@
 import { Outfit, JetBrains_Mono } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 import Providers from '../components/Providers';
 
@@ -23,19 +24,19 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${outfit.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
-        <script
+        <Script
+          id="theme-initializer"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
-              (function() {
-                try {
-                  var saved = localStorage.getItem('tc_admin_theme') || 'light';
-                  if (saved === 'dark') {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
-                } catch(e) {}
-              })();
+              try {
+                var saved = localStorage.getItem('tc_admin_theme') || 'light';
+                if (saved === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch(e) {}
             `,
           }}
         />
