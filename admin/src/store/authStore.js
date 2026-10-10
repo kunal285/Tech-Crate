@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+const isClient = typeof window !== 'undefined';
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   admin: null,
