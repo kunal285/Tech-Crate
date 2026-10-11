@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isRouteAllowed } from './constants/permissions';
 
-export function middleware(request) {
+export function proxy(request) {
   const { pathname } = request.nextUrl;
 
   // Public assets and Next.js internal paths to bypass
@@ -41,7 +41,7 @@ export function middleware(request) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // 3. RBAC validation for protected pages
+  // 4. RBAC validation for protected pages
   if (token && !isLoginPage && !isAccessDeniedPage) {
     const hasPermission = isRouteAllowed(role, pathname);
     if (!hasPermission) {
@@ -51,6 +51,8 @@ export function middleware(request) {
 
   return NextResponse.next();
 }
+
+export { proxy as middleware };
 
 export const config = {
   matcher: [
