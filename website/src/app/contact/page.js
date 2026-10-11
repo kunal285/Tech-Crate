@@ -77,9 +77,22 @@ export default function ContactPage() {
             </div>
             <h3 className="text-sm font-bold text-slate-900">WhatsApp & Phone Helpline</h3>
             <p className="text-xs text-slate-500">Mon to Sat, 9:00 AM – 7:00 PM IST:</p>
-            <span className="text-xs sm:text-sm font-bold text-slate-800 block font-mono">
-              +91 98765 43210
-            </span>
+            <div className="space-y-1">
+              <a
+                href="tel:+918329276568"
+                className="text-xs sm:text-sm font-bold text-blue-600 hover:underline block font-mono"
+              >
+                +91 83292 76568
+              </a>
+              <a
+                href="https://wa.me/918329276568"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-emerald-600 hover:underline block"
+              >
+                Chat on WhatsApp →
+              </a>
+            </div>
           </div>
 
           <div className="p-5 sm:p-6 rounded-2xl bg-white border border-slate-200/90 shadow-sm space-y-2.5">

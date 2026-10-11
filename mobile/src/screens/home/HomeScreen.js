@@ -513,9 +513,12 @@ const HomeScreen = ({ navigation }) => {
                 <ProjectCard
                   kit={item}
                   onPress={() =>
-                    navigation.navigate('Projects', {
-                      screen: 'ProjectKitDetail',
-                      params: { kitId: item._id, kit: item },
+                    navigation.navigate('ProjectKitDetail', {
+                      kitId: item._id || item.id,
+                      projectId: item._id || item.id,
+                      id: item._id || item.id,
+                      kit: item,
+                      project: item,
                     })
                   }
                 />

@@ -180,9 +180,12 @@ const PosterCarousel = ({ posters = [], isLoading = false, navigation }) => {
 
           case 'project':
             if (targetValue) {
-              navigation.navigate('Projects', {
-                screen: 'ProjectKitDetail',
-                params: { kitId: targetValue, kit: { _id: targetValue } },
+              navigation.navigate('ProjectKitDetail', {
+                kitId: targetValue,
+                projectId: targetValue,
+                id: targetValue,
+                kit: { _id: targetValue },
+                project: { _id: targetValue },
               });
             } else {
               navigation.navigate('Projects');

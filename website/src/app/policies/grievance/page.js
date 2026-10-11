@@ -56,7 +56,7 @@ export default function GrievanceRedressalPage() {
               </div>
               <div>
                 <span className="font-bold text-slate-500 block text-[11px] uppercase tracking-wider">Contact Number:</span>
-                <span className="font-mono text-slate-800 font-semibold">+91 98765 43210</span>
+                <span className="font-mono text-slate-800 font-semibold">+91 83292 76568</span>
               </div>
             </div>
 

@@ -70,6 +70,25 @@ export default function ProductDetailPage() {
         const fetched = res.data?.product || res.data;
         setProduct(fetched);
 
+        // Track in recently viewed
+        if (typeof window !== 'undefined' && fetched) {
+          try {
+            const raw = localStorage.getItem('techcrate_recently_viewed');
+            const list = raw ? JSON.parse(raw) : [];
+            const filtered = list.filter((p) => (p._id || p.id) !== (fetched._id || fetched.id));
+            filtered.unshift({
+              _id: fetched._id || fetched.id,
+              name: fetched.name || fetched.title,
+              title: fetched.title || fetched.name,
+              price: fetched.price,
+              images: fetched.images,
+              image: fetched.images?.[0] || fetched.image,
+              category: fetched.category,
+            });
+            localStorage.setItem('techcrate_recently_viewed', JSON.stringify(filtered.slice(0, 10)));
+          } catch {}
+        }
+
         // Populate sample initial reviews if none exist
         setReviewsList([
           {

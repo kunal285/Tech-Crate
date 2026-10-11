@@ -11,21 +11,13 @@ const normalizeApiUrl = (url) => {
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 };
 
-// Backend URL resolution
-const getLocalBackendUrl = () => {
-  // In production builds / release APK, fall back to persistent hosted backend
-  if (typeof __DEV__ !== 'undefined' && !__DEV__) {
-    return 'https://tech-crate.onrender.com/api';
-  }
-  // In Android emulator, 10.0.2.2 maps to the computer's localhost:5000
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000/api';
-  }
-  return 'http://localhost:5000/api';
+// Backend URL resolution - Hosted Render Backend
+const getBackendUrl = () => {
+  return 'https://tech-crate.onrender.com/api';
 };
 
 export const API_BASE_URL =
-  normalizeApiUrl(rawApiUrl) || getLocalBackendUrl();
+  normalizeApiUrl(rawApiUrl) || getBackendUrl();
 
 export const API_TIMEOUT = 45000;
 

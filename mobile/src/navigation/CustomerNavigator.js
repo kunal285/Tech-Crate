@@ -68,6 +68,8 @@ const HomeStack = () => (
     <Stack.Screen name="HomeMain" component={HomeScreen} />
     <Stack.Screen name="ProductList" component={ProductListScreen} />
     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
+    <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+    <Stack.Screen name="ProjectKitDetail" component={ProjectKitDetailScreen} />
     <Stack.Screen name="Category" component={CategoryScreen} />
     <Stack.Screen name="Reviews" component={ReviewsScreen} />
     <Stack.Screen name="WriteReview" component={WriteReviewScreen} />
@@ -87,6 +89,8 @@ const SearchStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="SearchMain" component={SearchScreen} />
     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
+    <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+    <Stack.Screen name="ProjectKitDetail" component={ProjectKitDetailScreen} />
     <Stack.Screen name="Category" component={CategoryScreen} />
     <Stack.Screen name="ProductList" component={ProductListScreen} />
     <Stack.Screen name="Wishlist" component={WishlistScreen} />
@@ -114,6 +118,8 @@ const CartStack = () => (
     <Stack.Screen name="PaymentResult" component={PaymentResultScreen} />
     <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />
     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
+    <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+    <Stack.Screen name="ProjectKitDetail" component={ProjectKitDetailScreen} />
     <Stack.Screen name="Wishlist" component={WishlistScreen} />
     <Stack.Screen name="Orders" component={OrdersScreen} />
     <Stack.Screen name="OrderHistory" component={OrdersScreen} />
@@ -136,6 +142,8 @@ const ProfileStack = () => (
     <Stack.Screen name="AddAddress" component={AddAddressScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
+    <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+    <Stack.Screen name="ProjectKitDetail" component={ProjectKitDetailScreen} />
   </Stack.Navigator>
 );
 

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const ProjectKit = require('../models/ProjectKit');
 
 // @desc Fetch all project kits directly from MongoDB
@@ -19,7 +20,15 @@ const getProjects = async (req, res) => {
 // @route GET /api/projects/:id
 const getProjectById = async (req, res) => {
   try {
-    const project = await ProjectKit.findById(req.params.id);
+    const { id } = req.params;
+    let project = null;
+    if (mongoose.isValidObjectId(id)) {
+      project = await ProjectKit.findById(id);
+    } else {
+      project = await ProjectKit.findOne({
+        $or: [{ _id: id }, { id: id }, { title: new RegExp(`^${id}$`, 'i') }],
+      });
+    }
     if (!project) {
       return res.status(404).json({ message: 'Project kit not found' });
     }

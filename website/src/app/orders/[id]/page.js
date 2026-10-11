@@ -393,7 +393,7 @@ export default function OrderDetailPage() {
 
         <div className="flex items-center gap-2 ml-auto">
           <a
-            href="tel:+919876543210"
+            href="tel:+918329276568"
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs"
           >
             <Phone className="w-3.5 h-3.5 text-slate-500" />

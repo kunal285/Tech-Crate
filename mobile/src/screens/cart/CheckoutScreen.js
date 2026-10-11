@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MapPin,
@@ -36,6 +37,7 @@ export default function CheckoutScreen({ route, navigation }) {
 
   const [paymentMethod, setPaymentMethod] = useState('Razorpay');
   const [loading, setLoading] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState([]);
 
   const [address, setAddress] = useState({
     fullName: '',
@@ -47,6 +49,34 @@ export default function CheckoutScreen({ route, navigation }) {
   });
 
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    const loadSavedAddresses = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@user_addresses');
+        if (stored) {
+          const list = JSON.parse(stored);
+          if (Array.isArray(list) && list.length > 0) {
+            setSavedAddresses(list);
+            const defaultItem = list.find((a) => a.isDefault) || list[0];
+            if (defaultItem) {
+              setAddress({
+                fullName: defaultItem.fullName || defaultItem.name || '',
+                phone: defaultItem.phone || '',
+                street: defaultItem.street || defaultItem.addressLine1 || '',
+                city: defaultItem.city || '',
+                state: defaultItem.state || 'India',
+                pincode: defaultItem.pincode || defaultItem.zipCode || '',
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore read error
+      }
+    };
+    loadSavedAddresses();
+  }, []);
 
   const validate = () => {
     const errs = {};
@@ -265,6 +295,52 @@ export default function CheckoutScreen({ route, navigation }) {
             <MapPin size={18} color="#0284C7" />
             <Text style={styles.cardTitleText}>Delivery Address</Text>
           </View>
+
+          {savedAddresses.length > 0 && (
+            <View style={styles.savedAddressesContainer}>
+              <Text style={styles.savedAddressesLabel}>Use Saved Address:</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.savedChipsRow}
+              >
+                {savedAddresses.map((item, idx) => {
+                  const isSelected =
+                    address.street === (item.street || item.addressLine1);
+                  return (
+                    <TouchableOpacity
+                      key={item.id || `saved_${idx}`}
+                      style={[
+                        styles.savedChip,
+                        isSelected && styles.savedChipActive,
+                      ]}
+                      onPress={() => {
+                        setAddress({
+                          fullName: item.fullName || item.name || '',
+                          phone: item.phone || '',
+                          street: item.street || item.addressLine1 || '',
+                          city: item.city || '',
+                          state: item.state || 'India',
+                          pincode: item.pincode || item.zipCode || '',
+                        });
+                        setErrors({});
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.savedChipText,
+                          isSelected && styles.savedChipTextActive,
+                        ]}
+                      >
+                        {item.type || item.title || `Address ${idx + 1}`}
+                        {item.isDefault ? ' (Default)' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
 
           <Input
             label="Full Name *"
@@ -709,6 +785,42 @@ const styles = StyleSheet.create({
   confirmBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  savedAddressesContainer: {
+    marginBottom: 12,
+  },
+  savedAddressesLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  savedChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  savedChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  savedChipActive: {
+    backgroundColor: '#0284C7' + '15',
+    borderColor: '#0284C7',
+  },
+  savedChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  savedChipTextActive: {
+    color: '#0284C7',
     fontWeight: '700',
   },
 });

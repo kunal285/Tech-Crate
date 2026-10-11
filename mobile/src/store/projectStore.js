@@ -107,9 +107,12 @@ const useProjectStore = create((set, get) => ({
     }
     try {
       const result = await projectService.getProject(id);
-      if (result.success && result.data?.project) {
-        set({ currentProject: result.data.project, isLoading: false });
-        return result;
+      if (result.success && result.data) {
+        const item = result.data?.project || result.data?.kit || result.data;
+        if (item && typeof item === 'object') {
+          set({ currentProject: item, isLoading: false });
+          return { success: true, data: { project: item } };
+        }
       }
     } catch {}
     return { success: !!existing, data: { project: existing } };
@@ -123,9 +126,12 @@ const useProjectStore = create((set, get) => ({
     }
     try {
       const result = await projectService.getProjectKit(id);
-      if (result.success && result.data?.kit) {
-        set({ currentKit: result.data.kit, isLoading: false });
-        return result;
+      if (result.success && result.data) {
+        const item = result.data?.kit || result.data?.project || result.data;
+        if (item && typeof item === 'object') {
+          set({ currentKit: item, isLoading: false });
+          return { success: true, data: { kit: item } };
+        }
       }
     } catch {}
     return { success: !!existing, data: { kit: existing } };

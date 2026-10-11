@@ -20,6 +20,7 @@ export const colors = {
   card: '#FFFFFF',
   inputBackground: '#FFFFFF',
 
+  text: '#0F172A',
   textPrimary: '#0F172A',
   textSecondary: '#475569',
   textTertiary: '#64748B',

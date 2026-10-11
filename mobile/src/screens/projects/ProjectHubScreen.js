@@ -69,7 +69,15 @@ export default function ProjectHubScreen({ navigation }) {
             <TouchableOpacity
               key={project._id}
               style={styles.projectCard}
-              onPress={() => navigation.navigate('ProjectDetail', { projectId: project._id, project })}
+              onPress={() =>
+                navigation.navigate('ProjectDetail', {
+                  projectId: project._id || project.id,
+                  kitId: project._id || project.id,
+                  id: project._id || project.id,
+                  project,
+                  kit: project,
+                })
+              }
             >
               <SafeImage
                 source={project.images || project.image || project.imageUrl}
