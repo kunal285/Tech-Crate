@@ -46,6 +46,7 @@ const projectKitSchema = new mongoose.Schema(
       {
         name: { type: String, required: true },
         quantity: { type: Number, default: 1 },
+        specification: { type: String, default: '' },
         productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
         unitPrice: { type: Number, default: 0 },
       },

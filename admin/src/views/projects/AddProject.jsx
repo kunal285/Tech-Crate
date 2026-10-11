@@ -15,6 +15,9 @@ import {
   Layers,
   Sparkles,
   Zap,
+  Boxes,
+  PlusCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 import api from '../../services/api';
@@ -35,18 +38,14 @@ export default function AddProject() {
   const [error, setError] = useState(null);
 
   // Gallery Images (Up to 4 slots)
-  const [images, setImages] = useState([
-    'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
-    '',
-    '',
-    '',
-  ]);
-  const [circuitDiagramUrl, setCircuitDiagramUrl] = useState(
-    'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80'
-  );
+  const [images, setImages] = useState(['', '', '', '']);
+  const [circuitDiagramUrl, setCircuitDiagramUrl] = useState('');
 
   const fileInputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
   const circuitInputRef = useRef(null);
+
+  // Bill of Materials (BOM) Items (Empty by default)
+  const [componentsRequired, setComponentsRequired] = useState([]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -56,10 +55,30 @@ export default function AddProject() {
     difficulty: 'Beginner',
     price: '',
     originalPrice: '',
-    estimatedTimeHours: 4,
-    codeSnippet:
-      '// C++ Firmware Blueprint\n#include <WiFi.h>\n\nvoid setup() {\n  Serial.begin(115200);\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(1000);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(1000);\n}',
+    estimatedTimeHours: '',
+    codeSnippet: '',
   });
+
+  const handleAddComponent = () => {
+    setComponentsRequired([
+      ...componentsRequired,
+      { name: '', quantity: 1, specification: 'Included in Kit' },
+    ]);
+  };
+
+  const handleUpdateComponent = (index, field, value) => {
+    const updated = [...componentsRequired];
+    updated[index][field] = value;
+    setComponentsRequired(updated);
+  };
+
+  const handleRemoveComponent = (index) => {
+    setComponentsRequired(componentsRequired.filter((_, i) => i !== index));
+  };
+
+  const handleQuickAddPreset = (preset) => {
+    setComponentsRequired([...componentsRequired, preset]);
+  };
 
   const handleImageUpload = async (slotIndex, file) => {
     if (!file) return;
@@ -134,17 +153,31 @@ export default function AddProject() {
 
     setIsSubmitting(true);
     try {
-      // Filter non-empty images
       const validImages = images.filter((img) => Boolean(img && img.trim()));
+      const validBOM = componentsRequired
+        .filter((c) => Boolean(c.name && c.name.trim()))
+        .map((c) => {
+          const item = {
+            name: c.name.trim(),
+            quantity: Number(c.quantity) || 1,
+            specification: (c.specification || '').trim(),
+          };
+          if (c.productId && String(c.productId).length === 24) {
+            item.productId = c.productId;
+          }
+          if (c.unitPrice) {
+            item.unitPrice = Number(c.unitPrice) || 0;
+          }
+          return item;
+        });
 
       await projectService.createProject({
         ...formData,
         price: Number(formData.price),
-        originalPrice: formData.originalPrice ? Number(formData.originalPrice) : Number(formData.price) * 1.3,
-        estimatedTimeHours: Number(formData.estimatedTimeHours) || 4,
-        images: validImages.length > 0 ? validImages : [
-          'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
-        ],
+        originalPrice: formData.originalPrice ? Number(formData.originalPrice) : 0,
+        estimatedTimeHours: Number(formData.estimatedTimeHours) || 0,
+        componentsRequired: validBOM,
+        images: validImages,
         circuitDiagramUrl: circuitDiagramUrl.trim(),
       });
       router.push('/projects');
@@ -157,9 +190,19 @@ export default function AddProject() {
 
   const tabs = [
     { id: 'general', label: '1. General Info' },
-    { id: 'images', label: '2. Images & Gallery' },
-    { id: 'circuit', label: '3. Schematic & Pinout' },
-    { id: 'firmware', label: '4. Firmware Code' },
+    { id: 'bom', label: `2. Bill of Materials (${componentsRequired.length})` },
+    { id: 'images', label: '3. Images & Gallery' },
+    { id: 'circuit', label: '4. Schematic & Pinout' },
+    { id: 'firmware', label: '5. Firmware Code' },
+  ];
+
+  const bomPresets = [
+    { name: 'Arduino Uno R3 (CH340G) Board', quantity: 1, specification: '16MHz 5V ATmega328P' },
+    { name: '0.96" I2C OLED Display Module (128x64)', quantity: 1, specification: 'SSD1306 4-Pin' },
+    { name: 'HC-SR04 Ultrasonic Distance Sensor', quantity: 1, specification: '2cm - 400cm Range' },
+    { name: 'SG90 Micro Servo Motor 9g', quantity: 1, specification: '180 Degree PWM' },
+    { name: 'Active 5V Piezo Buzzer Module', quantity: 1, specification: 'Audio alert trigger' },
+    { name: '9V Battery Clip with DC 2.1mm Barrel Jack', quantity: 1, specification: 'External power harness' },
   ];
 
   return (
@@ -167,7 +210,7 @@ export default function AddProject() {
       {/* Header */}
       <PageHeader
         title="Create Engineering Project"
-        subtitle="Publish a guided DIY tutorial, pinout diagram, hardware photography, and firmware sketch"
+        subtitle="Publish a guided DIY tutorial, pinout diagram, hardware photography, BOM checklist, and firmware sketch"
         breadcrumbs={[{ label: 'Catalog', href: '/projects' }, { label: 'New Project' }]}
         action={
           <Button
@@ -266,7 +309,130 @@ export default function AddProject() {
           </Card>
         )}
 
-        {/* Tab 2: Images & Gallery */}
+        {/* Tab 2: Bill of Materials (BOM) */}
+        {activeTab === 'bom' && (
+          <Card className="p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Boxes className="w-4 h-4 text-brand-primary" />
+                  <span>Bill of Materials (BOM) & Components Matrix</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Specify all hardware components, modules, and accessories bundled inside the turnkey kit.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleAddComponent}
+                icon={Plus}
+              >
+                Add Component
+              </Button>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Quick Add Maker Presets:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {bomPresets.map((preset, pIdx) => (
+                  <button
+                    key={pIdx}
+                    type="button"
+                    onClick={() => handleQuickAddPreset(preset)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors border border-slate-200/80 dark:border-slate-700"
+                  >
+                    <PlusCircle className="w-3 h-3 text-brand-primary" />
+                    <span>{preset.name.split(' ')[0]} {preset.name.split(' ')[1]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* BOM Rows */}
+            <div className="space-y-3 pt-2">
+              {componentsRequired.map((comp, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 transition-all hover:border-slate-300 dark:hover:border-slate-700"
+                >
+                  <span className="w-6 text-center font-bold text-xs text-slate-400">
+                    #{idx + 1}
+                  </span>
+
+                  {/* Component Name */}
+                  <div className="flex-1 w-full sm:w-auto">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Component Name (e.g. ESP32 NodeMCU, Relay Module)"
+                      value={comp.name}
+                      onChange={(e) => handleUpdateComponent(idx, 'name', e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-primary font-medium"
+                    />
+                  </div>
+
+                  {/* Quantity */}
+                  <div className="w-24 shrink-0">
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      placeholder="Qty"
+                      value={comp.quantity}
+                      onChange={(e) => handleUpdateComponent(idx, 'quantity', Number(e.target.value) || 1)}
+                      className="w-full px-3 py-1.5 text-xs text-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-primary font-bold tabular-nums"
+                    />
+                  </div>
+
+                  {/* Specification / Role */}
+                  <div className="flex-1 w-full sm:w-auto">
+                    <input
+                      type="text"
+                      placeholder="Role / Spec (e.g. 5V VCC, 400 tie-points, I2C)"
+                      value={comp.specification}
+                      onChange={(e) => handleUpdateComponent(idx, 'specification', e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                    />
+                  </div>
+
+                  {/* Delete Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveComponent(idx)}
+                    title="Remove component from BOM"
+                    className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+
+              {componentsRequired.length === 0 && (
+                <div className="text-center py-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                  <Boxes className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                  <p className="text-xs text-slate-500">No BOM components added yet</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddComponent}
+                    className="mt-2 text-xs"
+                  >
+                    Add First Component
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Tab 3: Images & Gallery */}
         {activeTab === 'images' && (
           <Card className="p-6 sm:p-8 space-y-6">
             <div>
@@ -361,7 +527,7 @@ export default function AddProject() {
           </Card>
         )}
 
-        {/* Tab 3: Schematic & Pinout */}
+        {/* Tab 4: Schematic & Pinout */}
         {activeTab === 'circuit' && (
           <Card className="p-6 sm:p-8 space-y-6">
             <div>
@@ -440,7 +606,7 @@ export default function AddProject() {
           </Card>
         )}
 
-        {/* Tab 4: Firmware Code */}
+        {/* Tab 5: Firmware Code */}
         {activeTab === 'firmware' && (
           <Card className="p-6 sm:p-8 space-y-4">
             <div>
@@ -469,7 +635,7 @@ export default function AddProject() {
             variant="outline"
             size="md"
             onClick={() => {
-              const tabOrder = ['general', 'images', 'circuit', 'firmware'];
+              const tabOrder = ['general', 'bom', 'images', 'circuit', 'firmware'];
               const currIdx = tabOrder.indexOf(activeTab);
               if (currIdx > 0) setActiveTab(tabOrder[currIdx - 1]);
             }}
@@ -485,7 +651,7 @@ export default function AddProject() {
                 variant="primary"
                 size="md"
                 onClick={() => {
-                  const tabOrder = ['general', 'images', 'circuit', 'firmware'];
+                  const tabOrder = ['general', 'bom', 'images', 'circuit', 'firmware'];
                   const currIdx = tabOrder.indexOf(activeTab);
                   if (currIdx < tabOrder.length - 1) setActiveTab(tabOrder[currIdx + 1]);
                 }}

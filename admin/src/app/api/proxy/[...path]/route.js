@@ -10,12 +10,13 @@ const BACKEND_URL = (
   'https://tech-crate.onrender.com/api'
 ).replace(/\/+$/, '');
 
+const LOCAL_BACKEND_URL = 'http://127.0.0.1:5000/api';
+
 async function proxyRequest(request, { params }) {
   try {
     const { path } = await params;
     const subPath = Array.isArray(path) ? path.join('/') : path;
     const { search } = new URL(request.url);
-    const targetUrl = `${BACKEND_URL}/${subPath}${search}`;
 
     const cookieStore = await cookies();
     const token = cookieStore.get('admin_token')?.value;
@@ -37,12 +38,44 @@ async function proxyRequest(request, { params }) {
       body = await request.arrayBuffer();
     }
 
-    const backendRes = await fetch(targetUrl, {
-      method: request.method,
-      headers,
-      body,
-      cache: 'no-store',
-    });
+    const isDev = process.env.NODE_ENV !== 'production';
+    const remoteUrl = `${BACKEND_URL}/${subPath}${search}`;
+    const localUrl = `${LOCAL_BACKEND_URL}/${subPath}${search}`;
+
+    const candidateUrls = [remoteUrl, localUrl];
+
+    let backendRes = null;
+    let lastError = null;
+
+    for (const url of candidateUrls) {
+      try {
+        const res = await fetch(url, {
+          method: request.method,
+          headers,
+          body,
+          cache: 'no-store',
+        });
+
+        // If the first candidate returned 404 (endpoint not yet deployed), try second candidate
+        if (res.status === 404 && candidateUrls.indexOf(url) === 0) {
+          backendRes = res;
+          continue;
+        }
+
+        backendRes = res;
+        break;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    if (!backendRes) {
+      if (lastError) throw lastError;
+      return NextResponse.json(
+        { error: 'Failed to communicate with backend service' },
+        { status: 502 }
+      );
+    }
 
     const responseHeaders = new Headers();
     const contentType = backendRes.headers.get('content-type') || 'application/json';

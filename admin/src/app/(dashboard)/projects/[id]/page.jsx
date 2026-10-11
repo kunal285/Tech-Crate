@@ -4,6 +4,7 @@ export const metadata = {
   title: 'Project Details — Tech Crate Admin',
 };
 
-export default function ProjectDetailsRoute() {
-  return <ProjectDetails />;
+export default async function ProjectDetailsRoute({ params }) {
+  const resolvedParams = await params;
+  return <ProjectDetails projectId={resolvedParams?.id} />;
 }

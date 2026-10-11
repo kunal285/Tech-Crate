@@ -8,6 +8,7 @@ export default function Button({
   variant = 'primary', // 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
   size = 'md', // 'sm' | 'md' | 'lg'
   loading = false,
+  isLoading = false,
   disabled = false,
   icon: Icon,
   type = 'button',
@@ -15,6 +16,8 @@ export default function Button({
   className = '',
   ...props
 }) {
+  const isButtonLoading = Boolean(loading || isLoading);
+
   const baseStyles =
     'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 focus-ring disabled:opacity-50 disabled:cursor-not-allowed select-none shadow-xs';
 
@@ -41,11 +44,11 @@ export default function Button({
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled || loading}
+      disabled={disabled || isButtonLoading}
       className={`${baseStyles} ${sizeStyles[size] || sizeStyles.md} ${variantStyles[variant] || variantStyles.primary} ${className}`}
       {...props}
     >
-      {loading ? (
+      {isButtonLoading ? (
         <Loader2 className="w-4 h-4 animate-spin shrink-0" />
       ) : Icon ? (
         <Icon className="w-4 h-4 shrink-0" />

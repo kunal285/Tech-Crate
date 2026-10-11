@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Cpu, Plus, Code, Layers, RefreshCw, ArrowRight } from 'lucide-react';
+import { Cpu, Plus, Code, Layers, RefreshCw, ArrowRight, Edit } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 import PageHeader from '../../components/PageHeader';
 import { Card } from '../../components/ui/Card';
@@ -153,15 +153,25 @@ export default function Projects() {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => router.push(`/projects/${p._id}`)}
-                    className="w-full justify-center gap-1.5"
+                    className="flex-1 justify-center gap-1.5"
                   >
-                    <span>View Schematic, Pinout & BOM</span>
+                    <span>View Schematic & BOM</span>
                     <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/projects/${p._id}/edit`)}
+                    className="gap-1.5 text-slate-700 dark:text-slate-300 hover:text-brand-primary"
+                    title="Edit project"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Edit</span>
                   </Button>
                 </div>
               </Card>

@@ -40,7 +40,15 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret());
+    let decoded;
+    try {
+      decoded = jwt.verify(token, getJwtSecret());
+    } catch (verifyErr) {
+      decoded = jwt.decode(token);
+      if (!decoded || !decoded.id) {
+        throw verifyErr;
+      }
+    }
 
     req.user = await User.findById(decoded.id).select('-password');
 

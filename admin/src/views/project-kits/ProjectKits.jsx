@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Plus, Layers, RefreshCw } from 'lucide-react';
+import { Box, Plus, Layers, RefreshCw, ArrowRight, Edit } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 import PageHeader from '../../components/PageHeader';
 import { Card } from '../../components/ui/Card';
@@ -152,9 +152,26 @@ export default function ProjectKits() {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs text-slate-500">
-                  <span>Estimated: {k.estimatedTimeHours || 3}h build</span>
-                  <span className="font-semibold text-brand-primary">Turn-key Packaged</span>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => router.push(`/projects/${k._id}`)}
+                    className="flex-1 justify-center gap-1.5"
+                  >
+                    <span>View Blueprint & BOM</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/projects/${k._id}/edit`)}
+                    className="gap-1.5 text-slate-700 dark:text-slate-300 hover:text-brand-primary"
+                    title="Edit project kit"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </Button>
                 </div>
               </Card>
             );

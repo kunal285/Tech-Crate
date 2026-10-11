@@ -14,6 +14,7 @@ import {
   Clock,
   Zap,
   Image as ImageIcon,
+  Edit,
 } from 'lucide-react';
 import { projectService } from '../../services/projectService';
 import PageHeader from '../../components/PageHeader';
@@ -21,9 +22,9 @@ import { Card } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 
-export default function ProjectDetails() {
+export default function ProjectDetails({ projectId }) {
   const params = useParams();
-  const id = params?.id;
+  const id = projectId || params?.id;
   const router = useRouter();
 
   const [project, setProject] = useState(null);
@@ -36,7 +37,8 @@ export default function ProjectDetails() {
     const fetchProject = async () => {
       try {
         setLoading(true);
-        const data = await projectService.getProjectById(id);
+        const res = await projectService.getProjectById(id);
+        const data = (res && res.data && !res.title) ? res.data : res;
         setProject(data);
         if (Array.isArray(data?.images) && data.images.length > 0) {
           setSelectedImage(data.images[0]);
@@ -111,6 +113,14 @@ export default function ProjectDetails() {
               icon={ArrowLeft}
             >
               Back to Projects
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => router.push(`/projects/${id}/edit`)}
+              icon={Edit}
+            >
+              Edit Project
             </Button>
             <Button
               variant="outline"
@@ -256,6 +266,37 @@ export default function ProjectDetails() {
             {description}
           </p>
         </div>
+
+        {/* Bill of Materials (BOM) */}
+        {Array.isArray(project?.componentsRequired) && project.componentsRequired.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+              Bill of Materials (BOM) — {project.componentsRequired.length} Components Included
+            </span>
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="py-2.5 px-3.5">#</th>
+                    <th className="py-2.5 px-3.5">Component / Module</th>
+                    <th className="py-2.5 px-3.5 text-center">Qty</th>
+                    <th className="py-2.5 px-3.5">Specification / Role</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {project.componentsRequired.map((c, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
+                      <td className="py-2.5 px-3.5 font-bold text-slate-400">{idx + 1}</td>
+                      <td className="py-2.5 px-3.5 font-bold text-slate-900 dark:text-slate-100">{c.name}</td>
+                      <td className="py-2.5 px-3.5 text-center font-bold tabular-nums text-slate-700 dark:text-slate-300">{c.quantity}x</td>
+                      <td className="py-2.5 px-3.5 text-slate-600 dark:text-slate-400">{c.specification || 'Included in Kit'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Embedded Firmware Sketch */}
         <div className="space-y-2">

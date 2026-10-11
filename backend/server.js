@@ -18,7 +18,7 @@ const app = express();
 // Trust reverse proxy for rate limiting if behind Nginx/Cloudflare
 app.set('trust proxy', 1);
 
-// Connect Database
+// Connect Database (Atlas test & TechCrate sync)
 connectDB();
 
 // Start Background Jobs

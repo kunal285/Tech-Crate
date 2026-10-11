@@ -52,45 +52,32 @@ export default function AddProduct() {
   const [title, setTitle] = useState('');
   const [sku, setSku] = useState('');
   const [category, setCategory] = useState('Microcontrollers');
-  const [stock, setStock] = useState(25);
+  const [stock, setStock] = useState('');
   const [description, setDescription] = useState('');
   const [datasheetUrl, setDatasheetUrl] = useState('');
 
   // Specifications
   const [specifications, setSpecifications] = useState({
-    operatingVoltage: '5V DC',
-    pinCount: 'N/A',
-    interface: 'I2C / SPI / GPIO',
+    operatingVoltage: '',
+    pinCount: '',
+    interface: '',
     dimensions: '',
     weight: '',
   });
 
   // Pricing
-  const [originalPrice, setOriginalPrice] = useState('599');
-  const [discountedPrice, setDiscountedPrice] = useState('449');
+  const [originalPrice, setOriginalPrice] = useState('');
+  const [discountedPrice, setDiscountedPrice] = useState('');
 
   // Variants (e.g. Header soldered vs unsoldered)
-  const [variants, setVariants] = useState([
-    { name: 'Standard Pin Header (Unsoldered)', priceOffset: 0, stock: 25 },
-    { name: 'Pre-Soldered Pin Header', priceOffset: 50, stock: 15 },
-  ]);
+  const [variants, setVariants] = useState([]);
 
   // Features List
-  const [features, setFeatures] = useState([
-    'High-performance microcontroller board for IoT & robotics',
-    'Integrated 2.4 GHz Wi-Fi and Bluetooth connectivity',
-    '30 GPIO pins supporting ADC, DAC, PWM, I2C, SPI & UART',
-    'Operating Voltage: 3.3V / 5V DC compatible with Arduino IDE',
-  ]);
+  const [features, setFeatures] = useState([]);
   const [newFeatureInput, setNewFeatureInput] = useState('');
 
-  // 4 Images per product
-  const [images, setImages] = useState([
-    'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
-    'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80',
-    'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-    'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=600&q=80',
-  ]);
+  // 4 Images per product (empty slots for user upload)
+  const [images, setImages] = useState(['', '', '', '']);
 
   const fileInputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
@@ -378,41 +365,49 @@ export default function AddProduct() {
           </div>
 
           <div className="space-y-3">
-            {variants.map((v, idx) => (
-              <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800">
-                <input
-                  type="text"
-                  placeholder="Variant Name"
-                  value={v.name}
-                  onChange={(e) => {
-                    const updated = [...variants];
-                    updated[idx].name = e.target.value;
-                    setVariants(updated);
-                    setIsDirty(true);
-                  }}
-                  className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-ring"
-                />
-                <input
-                  type="number"
-                  placeholder="Price Offset (₹)"
-                  value={v.priceOffset}
-                  onChange={(e) => {
-                    const updated = [...variants];
-                    updated[idx].priceOffset = Number(e.target.value);
-                    setVariants(updated);
-                    setIsDirty(true);
-                  }}
-                  className="w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-ring"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleRemoveVariant(idx)}
-                  className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            {variants.length === 0 ? (
+              <div className="text-center py-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                <Layers className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-1.5" />
+                <p className="text-xs text-slate-500">No variant options added yet.</p>
+                <p className="text-[11px] text-slate-400">Click &ldquo;Add Variant&rdquo; above if this component offers solder or pin configurations.</p>
               </div>
-            ))}
+            ) : (
+              variants.map((v, idx) => (
+                <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <input
+                    type="text"
+                    placeholder="Variant Name"
+                    value={v.name}
+                    onChange={(e) => {
+                      const updated = [...variants];
+                      updated[idx].name = e.target.value;
+                      setVariants(updated);
+                      setIsDirty(true);
+                    }}
+                    className="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-ring"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Price Offset (₹)"
+                    value={v.priceOffset}
+                    onChange={(e) => {
+                      const updated = [...variants];
+                      updated[idx].priceOffset = Number(e.target.value);
+                      setVariants(updated);
+                      setIsDirty(true);
+                    }}
+                    className="w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveVariant(idx)}
+                    className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       )}
@@ -457,7 +452,7 @@ export default function AddProduct() {
                   className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold gap-1.5 transition-opacity"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>{uploadingSlot === slotIdx ? 'Uploading...' : 'Replace'}</span>
+                  <span>{uploadingSlot === slotIdx ? 'Uploading...' : imgUrl ? 'Replace' : 'Upload'}</span>
                 </button>
               </div>
             ))}
@@ -470,19 +465,23 @@ export default function AddProduct() {
         <Card className="p-6 space-y-5">
           <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Key Feature Bullet Points</h3>
           <div className="space-y-2">
-            {features.map((feat, idx) => (
-              <div key={idx} className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900/80 rounded-xl text-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary shrink-0" />
-                <span className="flex-1 text-slate-700 dark:text-slate-300">{feat}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFeature(idx)}
-                  className="text-slate-400 hover:text-rose-500 p-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+            {features.length === 0 ? (
+              <p className="text-xs text-slate-400 py-2 italic">No feature bullets added yet. Enter a technical spec below.</p>
+            ) : (
+              features.map((feat, idx) => (
+                <div key={idx} className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900/80 rounded-xl text-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-primary shrink-0" />
+                  <span className="flex-1 text-slate-700 dark:text-slate-300">{feat}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFeature(idx)}
+                    className="text-slate-400 hover:text-rose-500 p-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))
+            )}
 
             <div className="flex gap-2 pt-1">
               <input
