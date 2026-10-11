@@ -1,6 +1,8 @@
 {
   "name": "TechCrate-backend",
   "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
   "description": "Shared Backend API for TechCrate Customer Mobile App & Admin Web Panel",
   "main": "server.js",
   "scripts": {

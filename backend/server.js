@@ -147,6 +147,20 @@ const openApiSpec = require('./docs/openapi.json');
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 app.get('/api/docs.json', (req, res) => res.json(openApiSpec));
 
+// Root entrypoint / index
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ONLINE',
+    service: 'TechCrate Shared Backend API',
+    version: '1.0.0',
+    documentation: '/api/docs',
+    health: '/health',
+    ready: '/ready',
+    api: '/api/v1',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Health & Readiness check endpoints
 app.get(['/health', '/api/health'], (req, res) => {
   res.json({

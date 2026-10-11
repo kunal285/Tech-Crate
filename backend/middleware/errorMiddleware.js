@@ -1,6 +1,6 @@
 const errorHandler = (err, req, res, next) => {
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  let errorCode = 'INTERNAL_SERVER_ERROR';
+  let errorCode = statusCode === 404 ? 'NOT_FOUND' : 'INTERNAL_SERVER_ERROR';
   let message = err.message || 'Internal Server Error';
   let details = null;
 
