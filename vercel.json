@@ -1,10 +1,17 @@
 {
   "version": 2,
   "name": "techcrate-backend",
+  "installCommand": "npm --prefix backend install",
+  "buildCommand": "npm --prefix backend run build",
   "builds": [
     {
       "src": "backend/server.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "backend/**"
+        ]
+      }
     }
   ],
   "routes": [
