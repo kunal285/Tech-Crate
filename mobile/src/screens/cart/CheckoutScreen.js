@@ -18,8 +18,12 @@ import {
 } from 'lucide-react-native';
 import Header from '../../components/common/Header';
 import Input from '../../components/common/Input';
-import { Colors } from '../../theme';
-import { API_BASE_URL } from '../../constants';
+import {
+  GPayLogo,
+  PhonePeLogo,
+  PaytmLogo,
+  UpiGenericLogo,
+} from '../../components/common/PaymentLogos';
 import { useCartStore } from '../../store/cartStore';
 import { orderService } from '../../services/orderService';
 import paymentService from '../../services/paymentService';
@@ -30,7 +34,7 @@ export default function CheckoutScreen({ route, navigation }) {
   const items = useCartStore((state) => state.items || []);
   const clearCart = useCartStore((state) => state.clearCart);
 
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [paymentMethod, setPaymentMethod] = useState('Razorpay');
   const [loading, setLoading] = useState(false);
 
   const [address, setAddress] = useState({
@@ -79,6 +83,16 @@ export default function CheckoutScreen({ route, navigation }) {
       return;
     }
 
+    if (paymentMethod === 'UPI' || paymentMethod === 'Razorpay') {
+      await createOnlineOrder();
+      return;
+    }
+
+    // Otherwise process Cash on Delivery (COD)
+    await processCodPayment();
+  };
+
+  const createOnlineOrder = async () => {
     try {
       setLoading(true);
       const orderData = {
@@ -100,6 +114,93 @@ export default function CheckoutScreen({ route, navigation }) {
           pincode: address.pincode.trim(),
         },
         paymentMethod,
+      };
+
+      // Initiate checkout session on backend (atomically reserves inventory)
+      const res = await orderService.initiateCheckout(orderData);
+      const sessionData = res.data || res;
+
+      if (!sessionData || sessionData.success === false) {
+        throw new Error(sessionData?.message || 'Failed to initialize checkout. Please try again.');
+      }
+
+      // Branch 1: AutoUPI Gateway (Hosted page or UPI Intent)
+      if (paymentMethod === 'UPI') {
+        if (sessionData.payment_url) {
+          try {
+            await paymentService.openPaymentGateway(sessionData.payment_url);
+          } catch (linkErr) {
+            console.warn('[Open Gateway URL Warning]', linkErr.message);
+          }
+        }
+
+        navigation.replace('PaymentProcessing', {
+          order_id: sessionData.session_id,
+          orderId: sessionData.session_id,
+        });
+        return;
+      }
+
+      // Branch 2: Razorpay in-app modal
+      if (paymentMethod === 'Razorpay') {
+        if (!sessionData.razorpay_order_id || !sessionData.razorpay_key_id) {
+          throw new Error('Razorpay gateway configuration is missing. Please select another method.');
+        }
+
+        const rzpResponse = await paymentService.openRazorpayCheckout(sessionData);
+
+        let verifiedOrderId = sessionData.session_id;
+        try {
+          const verifyResult = await paymentService.verifyPayment({
+            razorpay_payment_id: rzpResponse.razorpay_payment_id,
+            razorpay_order_id: rzpResponse.razorpay_order_id,
+            razorpay_signature: rzpResponse.razorpay_signature,
+            session_id: sessionData.session_id,
+          });
+          if (verifyResult && (verifyResult.final_order_id || verifyResult.order_id)) {
+            verifiedOrderId = verifyResult.final_order_id || verifyResult.order_id;
+          }
+        } catch (verifyErr) {
+          console.warn('[Mobile Payment Verification Warning]', verifyErr.message);
+        }
+
+        navigation.replace('PaymentProcessing', {
+          order_id: verifiedOrderId,
+          orderId: verifiedOrderId,
+          razorpay_payment_id: rzpResponse.razorpay_payment_id,
+        });
+        return;
+      }
+
+    } catch (error) {
+      Alert.alert('Order Placement Error', error.message || 'Error processing your order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processCodPayment = async () => {
+    try {
+      setLoading(true);
+      const orderData = {
+        orderItems: items.map((i) => ({
+          title: i.title || i.name,
+          quantity: i.quantity || 1,
+          price: i.price,
+          image: i.images?.[0] || i.image || i.imageUrl,
+          product: i.productId || i._id || i.id,
+          projectKit: i.projectKitId,
+          itemType: i.itemType || 'product',
+        })),
+        shippingAddress: {
+          fullName: address.fullName.trim(),
+          phone: address.phone.trim(),
+          street: address.street.trim(),
+          city: address.city.trim(),
+          state: address.state.trim() || 'India',
+          pincode: address.pincode.trim(),
+        },
+        paymentMethod: 'COD',
         itemsPrice: grandTotal,
         taxPrice: 0,
         shippingPrice: 0,
@@ -115,38 +216,15 @@ export default function CheckoutScreen({ route, navigation }) {
       const createdOrder = res.data?.order || res.data || res;
       const targetOrderId = createdOrder._id || createdOrder.order_id;
 
-      if (paymentMethod === 'COD') {
-        if (typeof clearCart === 'function') {
-          await clearCart();
-        }
-        navigation.replace('OrderSuccess', {
-          order: createdOrder,
-          orderId: targetOrderId,
-          trackingNumber: createdOrder.trackingNumber,
-          grandTotal,
-        });
-        return;
+      if (typeof clearCart === 'function') {
+        await clearCart();
       }
 
-      // Online Payment Gateway (UPI / Card / NetBanking)
-      const paymentIntentRes = await paymentService.createOrder({
-        amount: grandTotal,
-        currency: 'INR',
-        order_id: String(targetOrderId),
-        redirect_url: 'TechCrate://payment/success',
-        webhook_url: `${API_BASE_URL}/webhooks/payment`,
-      });
-
-      const paymentUrl = paymentIntentRes?.payment_url;
-      if (paymentUrl) {
-        // Open payment gateway browser / native intent
-        await paymentService.openPaymentGateway(paymentUrl);
-      }
-
-      // Navigate to Payment Processing screen awaiting deep link or webhook verification
-      navigation.replace('PaymentProcessing', {
-        order_id: targetOrderId,
+      navigation.replace('OrderSuccess', {
+        order: createdOrder,
         orderId: targetOrderId,
+        trackingNumber: createdOrder.trackingNumber,
+        grandTotal,
       });
     } catch (error) {
       Alert.alert('Order Placement Error', error.message || 'Error processing your order');
@@ -166,6 +244,21 @@ export default function CheckoutScreen({ route, navigation }) {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.checkoutSteps}>
+          {[
+            ['1', 'Address', true],
+            ['2', 'Payment', true],
+            ['3', 'Done', false],
+          ].map(([step, title, active]) => (
+            <View key={step} style={styles.checkoutStep}>
+              <View style={[styles.stepCircle, active && styles.stepCircleActive]}>
+                <Text style={[styles.stepNumber, active && styles.stepNumberActive]}>{step}</Text>
+              </View>
+              <Text style={[styles.stepLabel, active && styles.stepLabelActive]}>{title}</Text>
+            </View>
+          ))}
+        </View>
+
         {/* Shipping Address Section */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
@@ -238,7 +331,7 @@ export default function CheckoutScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* Payment Method Selector */}
+        {/* Payment Method Selector (UPI & COD Only) */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <CreditCard size={18} color="#0284C7" />
@@ -246,10 +339,18 @@ export default function CheckoutScreen({ route, navigation }) {
           </View>
 
           {[
-            { id: 'UPI', label: 'Instant Auto UPI (Google Pay, PhonePe, Paytm)' },
-            { id: 'Card', label: 'Debit / Credit Card (Visa, MasterCard, RuPay)' },
-            { id: 'NetBanking', label: 'Net Banking (All Indian Banks)' },
-            { id: 'COD', label: 'Cash on Delivery (COD)' },
+            {
+              id: 'Razorpay',
+              title: 'UPI, Cards & NetBanking (Razorpay)',
+              subtitle: 'UPI (GPay/PhonePe), Credit/Debit Cards & NetBanking (Test Mode Active)',
+              isUpi: false,
+            },
+            {
+              id: 'COD',
+              title: 'Cash on Delivery (COD)',
+              subtitle: 'Pay cash upon order delivery at your doorstep',
+              isUpi: false,
+            },
           ].map((method) => {
             const isSelected = paymentMethod === method.id;
             return (
@@ -271,19 +372,40 @@ export default function CheckoutScreen({ route, navigation }) {
                   >
                     {isSelected && <View style={styles.radioInner} />}
                   </View>
-                  <Text
-                    style={[
-                      styles.paymentText,
-                      isSelected && styles.paymentTextSelected,
-                    ]}
-                  >
-                    {method.label}
-                  </Text>
+                  <View style={styles.flexOne}>
+                    <View style={styles.paymentHeaderRow}>
+                      <Text
+                        style={[
+                          styles.paymentText,
+                          isSelected && styles.paymentTextSelected,
+                        ]}
+                      >
+                        {method.title}
+                      </Text>
+                      {method.isUpi && (
+                        <View style={styles.miniLogoRow}>
+                          <GPayLogo size={20} />
+                          <PhonePeLogo size={20} />
+                          <PaytmLogo size={20} />
+                          <UpiGenericLogo size={20} />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.paymentSubtext}>{method.subtitle}</Text>
+                  </View>
                 </View>
                 {isSelected && <Check size={16} color="#0284C7" />}
               </TouchableOpacity>
             );
           })}
+          <View style={styles.selectedPaymentInfo}>
+            <ShieldCheck size={16} color="#15803D" />
+            <Text style={styles.selectedPaymentInfoText}>
+              {paymentMethod === 'Razorpay'
+                ? 'Secure test-mode transaction via Razorpay. UPI, Cards & NetBanking supported.'
+                : 'Pay the delivery partner in cash when your order arrives.'}
+            </Text>
+          </View>
         </View>
 
         {/* Order Summary & Delivery Guarantee */}
@@ -331,11 +453,16 @@ export default function CheckoutScreen({ route, navigation }) {
           accessibilityLabel="Pay and Confirm Order"
         >
           <Text style={styles.confirmBtnText}>
-            {loading ? 'Initializing Gateway...' : 'Pay & Confirm'}
+            {loading
+              ? 'Processing...'
+              : paymentMethod === 'UPI'
+                ? 'Continue to payment'
+                : 'Place COD order'}
           </Text>
           {!loading && <ArrowRight size={17} color="#FFFFFF" />}
         </TouchableOpacity>
       </View>
+
     </View>
   );
 }
@@ -359,6 +486,48 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 3,
     elevation: 1,
+  },
+  checkoutSteps: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+  },
+  checkoutStep: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 4,
+  },
+  stepCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCircleActive: {
+    backgroundColor: '#0284C7',
+  },
+  stepNumber: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  stepNumberActive: {
+    color: '#FFFFFF',
+  },
+  stepLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  stepLabelActive: {
+    color: '#0369A1',
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -418,14 +587,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#0284C7',
   },
   paymentText: {
-    color: '#475569',
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
   },
   paymentTextSelected: {
     color: '#0369A1',
-    fontWeight: '700',
+    fontWeight: '800',
+  },
+  paymentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  miniLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  paymentSubtext: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+  },
+  selectedPaymentInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  selectedPaymentInfoText: {
+    flex: 1,
+    color: '#166534',
+    fontSize: 11,
+    lineHeight: 16,
   },
   guaranteeRow: {
     flexDirection: 'row',

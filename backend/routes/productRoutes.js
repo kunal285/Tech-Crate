@@ -15,6 +15,8 @@ router.route('/')
   .get(getProducts)
   .post(protect, authorizeRoles('seller', 'admin'), validate(createProductSchema), createProduct);
 
+router.get('/search', getProducts);
+
 router
   .route('/:id')
   .get(getProductById)

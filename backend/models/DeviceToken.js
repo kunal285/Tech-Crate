@@ -30,7 +30,6 @@ const deviceTokenSchema = new mongoose.Schema(
   }
 );
 
-deviceTokenSchema.index({ user: 1 });
 deviceTokenSchema.index({ lastActiveAt: -1 });
 
 module.exports = mongoose.model('DeviceToken', deviceTokenSchema);

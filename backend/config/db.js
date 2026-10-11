@@ -1,4 +1,12 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// Ensure MongoDB Atlas SRV records resolve reliably on Windows / custom DNS setups
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (dnsErr) {
+  // Ignore in restricted environments
+}
 const User = require('../models/User');
 const Product = require('../models/Product');
 const ProjectKit = require('../models/ProjectKit');
@@ -35,12 +43,14 @@ const populateLiveData = async () => {
       console.log(`[Live DB] Database active with ${userCount} users.`);
     }
 
+    const isFirstTimeInit = userCount === 0;
+
     const productCount = await Product.countDocuments();
-    if (productCount === 0 && liveProducts.length > 0) {
+    if (isFirstTimeInit && productCount === 0 && liveProducts.length > 0) {
       await Product.insertMany(liveProducts);
-      console.log(`[Live DB] Seeded ${liveProducts.length} authentic hardware components.`);
+      console.log(`[Live DB] Seeded ${liveProducts.length} initial authentic hardware components for fresh setup.`);
     } else {
-      console.log(`[Live DB] Catalog active with ${productCount} components.`);
+      console.log(`[Live DB] Catalog active with ${productCount} components (User-managed, preserved).`);
     }
 
     const posterCount = await Poster.countDocuments();
@@ -71,7 +81,7 @@ const connectDB = async () => {
 
   try {
     const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 2000,
+      serverSelectionTimeoutMS: 10000,
     });
     console.log(`[MongoDB] Connected: ${conn.connection.host}`);
     await populateLiveData();

@@ -2,29 +2,46 @@ const express = require('express');
 const router = express.Router();
 const {
   createPaymentOrder,
+  verifyPayment,
   getPaymentStatus,
   handlePaymentWebhook,
+  reconcilePaymentManual,
   getPaymentHistory,
+  renderPaymentSuccessPage,
+  renderPaymentFailedPage,
 } = require('../controllers/paymentController');
-const { protect, optionalProtect } = require('../middleware/authMiddleware');
+const { protect, optionalProtect, authorizeRoles } = require('../middleware/authMiddleware');
 const { checkoutLimiter } = require('../middleware/rateLimiter');
 
-// Webhook endpoints (accessible by Gateway & External Webhook Senders)
+// 0. Success & Failure Redirect Landing Pages (AutoUPI / PayCow browser redirect)
+router.get(['/payment-success', '/success', '/callback'], renderPaymentSuccessPage);
+router.get(['/payment-failed', '/failed'], renderPaymentFailedPage);
+router.get('/', (req, res, next) => {
+  if (req.baseUrl.includes('payment-success')) return renderPaymentSuccessPage(req, res);
+  if (req.baseUrl.includes('payment-failed')) return renderPaymentFailedPage(req, res);
+  next();
+});
+
+// 1. Webhook endpoints (Cryptographically verified via HMAC signature)
 router.post('/webhook', handlePaymentWebhook);
 router.post('/webhooks/payment', handlePaymentWebhook);
-router.post('/autoupi/webhook', handlePaymentWebhook);
+router.post('/payment', handlePaymentWebhook);
+router.post('/', handlePaymentWebhook);
 
-// Order Creation endpoints
-router.post('/orders/create', optionalProtect, checkoutLimiter, createPaymentOrder);
-router.post('/create-order', optionalProtect, checkoutLimiter, createPaymentOrder);
-router.post('/autoupi/create-order', optionalProtect, checkoutLimiter, createPaymentOrder);
+// 2. Order Payment Initiation endpoints (Strictly protected by authentication & rate limiting)
+router.post('/orders/create', protect, checkoutLimiter, createPaymentOrder);
+router.post('/create-order', protect, checkoutLimiter, createPaymentOrder);
 
-// Status Verification endpoints (Server-side Source of Truth)
-router.get('/:order_id/status', optionalProtect, getPaymentStatus);
-router.get('/status/:order_id', optionalProtect, getPaymentStatus);
-router.post('/verify', optionalProtect, getPaymentStatus);
+// 3. Status Verification endpoints (Server-Authoritative Source of Truth)
+router.get('/:order_id/status', protect, getPaymentStatus);
+router.get('/status/:order_id', protect, getPaymentStatus);
+router.post('/verify', protect, verifyPayment);
+router.post('/razorpay/verify', protect, verifyPayment);
 
-// Payment History
+// 4. Admin Privileged Manual Reconciliation (Requires Admin Role & Audit Logging)
+router.post('/reconcile', protect, authorizeRoles('admin'), reconcilePaymentManual);
+
+// 5. Payment History
 router.get('/history', protect, getPaymentHistory);
 
 module.exports = router;

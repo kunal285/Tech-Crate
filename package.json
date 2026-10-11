@@ -9,8 +9,15 @@
     "dev:backend": "npm --prefix backend run dev",
     "start:admin": "npm --prefix admin run dev",
     "build:admin": "npm --prefix admin run build",
+    "dev:website": "npm --prefix website run dev",
+    "build:website": "npm --prefix website run build",
+    "start:website": "npm --prefix website start",
     "start:mobile": "npm --prefix mobile start",
     "start:mobile:8082": "npm --prefix mobile run start:8082",
+    "test": "npm --prefix backend test",
+    "test:checkout": "npm --prefix backend run test:checkout",
+    "test:mobile": "npm --prefix mobile test",
+    "android": "npm run android:mobile",
     "android:mobile": "npm --prefix mobile run android"
   }
 }

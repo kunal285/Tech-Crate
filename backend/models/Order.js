@@ -43,7 +43,7 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['UPI', 'Card', 'NetBanking', 'COD'],
+      enum: ['UPI', 'Card', 'NetBanking', 'COD', 'Razorpay'],
       default: 'UPI',
     },
     paymentResult: {
@@ -57,12 +57,16 @@ const orderSchema = new mongoose.Schema(
     taxPrice: { type: Number, required: true, default: 0.0 },
     shippingPrice: { type: Number, required: true, default: 0.0 },
     totalPrice: { type: Number, required: true, default: 0.0 },
+    itemsPricePaise: { type: Number, default: 0 },
+    taxPricePaise: { type: Number, default: 0 },
+    shippingPricePaise: { type: Number, default: 0 },
+    totalPricePaise: { type: Number, default: 0 },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: Date,
     orderStatus: {
       type: String,
       required: true,
-      enum: ['Pending', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'FAILED'],
+      enum: ['Pending', 'Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'FAILED'],
       default: 'Pending',
     },
     deliveredAt: Date,

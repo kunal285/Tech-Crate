@@ -1,40 +1,54 @@
 import { create } from 'zustand';
-import api from '../services/api';
 
-const getInitialUser = () => {
-  try {
-    const stored = localStorage.getItem('adminUser');
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
-  }
-};
+const isClient = typeof window !== 'undefined';
 
 export const useAuthStore = create((set, get) => ({
-  user: getInitialUser(),
-  admin: getInitialUser(),
-  token: localStorage.getItem('adminToken') || null,
-  refreshToken: localStorage.getItem('adminRefreshToken') || null,
-  isAuthenticated: !!localStorage.getItem('adminToken'),
+  user: null,
+  admin: null,
+  isAuthenticated: false,
   loading: false,
   error: null,
   require2FA: false,
+
+  initAuth: () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem('adminUser');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        set({
+          user: parsed,
+          admin: parsed,
+          isAuthenticated: true,
+        });
+      }
+    } catch {
+      // silent fallback
+    }
+  },
 
   login: async (email, password, { totpCode, recoveryCode } = {}) => {
     set({ loading: true, error: null });
     try {
       const identifier = String(email || '').trim();
-      const response = await api.post('/auth/login', {
-        username: identifier,
-        email: identifier,
-        password,
-        totpCode,
-        recoveryCode,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: identifier,
+          email: identifier,
+          password,
+          totpCode,
+          recoveryCode,
+        }),
       });
 
-      const data = response.data;
+      const data = await res.json();
 
-      // Handle 2FA Challenge if configured
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Authentication failed');
+      }
+
       if (data.require2FA) {
         set({
           require2FA: true,
@@ -44,22 +58,14 @@ export const useAuthStore = create((set, get) => ({
         return false;
       }
 
-      // Strict role check: Must be admin
-      if (data.role !== 'admin') {
-        throw new Error('Access Denied: Only Admin role can access this administrative console.');
+      const userData = data.user || data;
+      if (isClient) {
+        localStorage.setItem('adminUser', JSON.stringify(userData));
       }
-
-      localStorage.setItem('adminToken', data.token);
-      if (data.refreshToken) {
-        localStorage.setItem('adminRefreshToken', data.refreshToken);
-      }
-      localStorage.setItem('adminUser', JSON.stringify(data));
 
       set({
-        user: data,
-        admin: data,
-        token: data.token,
-        refreshToken: data.refreshToken || null,
+        user: userData,
+        admin: userData,
         isAuthenticated: true,
         require2FA: false,
         loading: false,
@@ -67,13 +73,8 @@ export const useAuthStore = create((set, get) => ({
       });
       return true;
     } catch (err) {
-      let errorMsg =
-        err.response?.data?.message || err.message;
-      if (!err.response && (err.code === 'ECONNABORTED' || err.message === 'Network Error')) {
-        errorMsg = 'Backend server is waking up or temporarily unreachable. Please wait 10 seconds and try again.';
-      }
       set({
-        error: errorMsg || 'Authentication failed. Please verify credentials.',
+        error: err.message || 'Authentication failed. Please check credentials.',
         loading: false,
       });
       return false;
@@ -81,24 +82,21 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
-    const refreshToken = localStorage.getItem('adminRefreshToken');
-    if (refreshToken) {
-      try {
-        await api.post('/auth/logout', { refreshToken });
-      } catch {
-        // Silent fallback
-      }
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // silent fallback
     }
 
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminRefreshToken');
-    localStorage.removeItem('adminUser');
+    if (isClient) {
+      localStorage.removeItem('adminUser');
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminRefreshToken');
+    }
 
     set({
       user: null,
       admin: null,
-      token: null,
-      refreshToken: null,
       isAuthenticated: false,
       require2FA: false,
       loading: false,

@@ -78,9 +78,43 @@ const checkCompatibility = async (req, res) => {
   }
 };
 
+// @desc Update a project kit in MongoDB
+// @route PUT /api/projects/:id
+const updateProject = async (req, res) => {
+  try {
+    const updated = await ProjectKit.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ message: 'Project kit not found' });
+    }
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc Delete a project kit in MongoDB
+// @route DELETE /api/projects/:id
+const deleteProject = async (req, res) => {
+  try {
+    const deleted = await ProjectKit.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Project kit not found' });
+    }
+    res.json({ message: 'Project kit deleted successfully', id: req.params.id });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getProjects,
   getProjectById,
   createProject,
+  updateProject,
+  deleteProject,
   checkCompatibility,
 };

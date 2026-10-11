@@ -1,56 +1,59 @@
-// TechCrate Color System
-const Colors = {
-  // Primary Brand
-  primary: '#1E3A5F',
-  primaryLight: '#2E5090',
-  primaryDark: '#0D1F35',
-  primaryAccent: '#4A90D9',
+// TechCrate Design System Color Tokens
+export const colors = {
+  primary: '#2563EB',
+  primaryDark: '#1D4ED8',
+  primaryLight: '#DBEAFE',
 
-  // Secondary / Action
-  secondary: '#F97316',
-  secondaryLight: '#FB923C',
-  secondaryDark: '#C2410C',
+  secondary: '#7C3AED',
+  secondaryDark: '#6D28D9',
+  secondaryLight: '#EDE9FE',
 
-  // Success / Status
-  success: '#10B981',
-  successLight: '#34D399',
-  warning: '#F59E0B',
-  error: '#EF4444',
-  errorLight: '#FCA5A5',
-  info: '#3B82F6',
+  accent: '#06B6D4',
+  accentDark: '#0891B2',
+  accentLight: '#CFFAFE',
 
-  // Neutrals
-  white: '#FFFFFF',
-  black: '#000000',
   background: '#F8FAFC',
-  surface: '#FFFFFF',
-  surfaceElevated: '#F1F5F9',
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
-  divider: '#E2E8F0',
+  backgroundSecondary: '#F1F5F9',
 
-  // Text
+  surface: '#FFFFFF',
+  surfaceElevated: '#F8FAFC',
+  card: '#FFFFFF',
+  inputBackground: '#FFFFFF',
+
   textPrimary: '#0F172A',
   textSecondary: '#475569',
+  textTertiary: '#64748B',
   textMuted: '#94A3B8',
+  textDisabled: '#CBD5E1',
+
   textOnPrimary: '#FFFFFF',
   textOnSecondary: '#FFFFFF',
 
-  // Dark Mode
-  dark: {
-    background: '#0F172A',
-    surface: '#1E293B',
-    surfaceElevated: '#334155',
-    border: '#334155',
-    textPrimary: '#F8FAFC',
-    textSecondary: '#CBD5E1',
-    textMuted: '#64748B',
-  },
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
+  borderDark: '#CBD5E1',
+  divider: '#E5E7EB',
 
-  // Gradients (used as arrays)
-  gradientPrimary: ['#1E3A5F', '#2E5090'],
-  gradientSecondary: ['#F97316', '#FB923C'],
-  gradientHero: ['#1E3A5F', '#4A90D9'],
+  success: '#16A34A',
+  successBackground: '#DCFCE7',
+
+  warning: '#F59E0B',
+  warningBackground: '#FEF3C7',
+
+  error: '#DC2626',
+  errorBackground: '#FEE2E2',
+
+  info: '#0284C7',
+  infoBackground: '#E0F2FE',
+
+  white: '#FFFFFF',
+  black: '#000000',
+
+  // Gradients
+  gradientPrimary: ['#2563EB', '#1D4ED8'],
+  gradientSecondary: ['#7C3AED', '#6D28D9'],
+  gradientAccent: ['#06B6D4', '#0891B2'],
+  gradientHero: ['#2563EB', '#7C3AED'],
 
   // Category Colors
   categories: {
@@ -58,39 +61,35 @@ const Colors = {
     esp32: '#E7322A',
     raspberry: '#C51A4A',
     sensors: '#6366F1',
-    robotics: '#8B5CF6',
+    robotics: '#7C3AED',
     iot: '#06B6D4',
     embedded: '#F59E0B',
-    motors: '#10B981',
-    displays: '#3B82F6',
-    power: '#EF4444',
+    motors: '#16A34A',
+    displays: '#2563EB',
+    power: '#DC2626',
     tools: '#64748B',
-    kits: '#F97316',
+    kits: '#7C3AED',
   },
 
   // Difficulty Colors
   difficulty: {
-    beginner: '#10B981',
+    beginner: '#16A34A',
     intermediate: '#F59E0B',
-    advanced: '#EF4444',
-    expert: '#8B5CF6',
+    advanced: '#DC2626',
+    expert: '#7C3AED',
   },
 
-  // Rating
+  // Star Rating
   star: '#F59E0B',
   starEmpty: '#E2E8F0',
 
-  // Overlay
+  // Overlays
   overlay: 'rgba(15, 23, 42, 0.5)',
   overlayLight: 'rgba(15, 23, 42, 0.3)',
   overlayDark: 'rgba(15, 23, 42, 0.8)',
 
-  // Transparent
   transparent: 'transparent',
 };
 
-const colors = Colors;
-export { Colors, colors };
-export default Colors;
-
-
+export const Colors = colors;
+export default colors;

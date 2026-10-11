@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const ProjectKit = require('../models/ProjectKit');
 const Coupon = require('../models/Coupon');
 const Cart = require('../models/Cart');
+const { calculateOrderTotals } = require('../utils/money');
 
 // @desc Create new order with server-enforced pricing, coupon validation & atomic inventory deduction
 // @route POST /api/orders
@@ -54,14 +55,10 @@ const createOrder = async (req, res) => {
           throw new Error(`Product not found.`);
         }
 
-        // Atomic inventory deduction to prevent race conditions & negative stock
-        const updatedProduct = await Product.findOneAndUpdate(
-          { _id: productId, stock: { $gte: qty } },
-          { $inc: { stock: -qty } },
-          { new: true }
-        );
-
-        if (!updatedProduct) {
+        // Validate stock before payment verification. Inventory is reserved only after
+        // the backend confirms a successful payment, so the customer can safely retry
+        // without losing stock or cart state before the payment is trusted.
+        if (product.stock < qty) {
           throw new Error(`Insufficient stock for "${product.title}". Only ${product.stock} units remaining.`);
         }
 
@@ -112,11 +109,17 @@ const createOrder = async (req, res) => {
       }
     }
 
-    // 3. Tax and Shipping calculations
-    const discountedSubtotal = Math.max(0, itemsPrice - discountAmount);
-    const shippingPrice = discountedSubtotal >= 999 || discountedSubtotal === 0 ? 0 : 70;
-    const taxPrice = Math.round(discountedSubtotal * 0.18); // 18% standard GST
-    const totalPrice = discountedSubtotal + shippingPrice + taxPrice;
+    // 3. Tax and Shipping calculations (authoritative INR & Paise)
+    const totals = calculateOrderTotals({ itemsPrice, discountAmount });
+    const {
+      shippingPrice,
+      taxPrice,
+      totalPrice,
+      itemsPricePaise,
+      taxPricePaise,
+      shippingPricePaise,
+      totalPricePaise,
+    } = totals;
 
     // 4. Create the verified order
     const order = new Order({
@@ -136,27 +139,33 @@ const createOrder = async (req, res) => {
       taxPrice,
       shippingPrice,
       totalPrice,
-      isPaid: paymentMethod === 'COD' ? false : true, // Simulated live payment for in-app flow, COD pending
-      paidAt: paymentMethod === 'COD' ? null : new Date(),
-      orderStatus: 'Processing',
+      itemsPricePaise,
+      taxPricePaise,
+      shippingPricePaise,
+      totalPricePaise,
+      isPaid: false, // Must be verified by backend before transitioning to true
+      paidAt: null,
+      orderStatus: paymentMethod === 'COD' ? 'Processing' : 'Pending',
     });
 
     const createdOrder = await order.save();
 
-    // 5. Clear user's cart on successful checkout
-    await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
+    // 5. Keep the cart intact until payment has been verified and an order is confirmed.
+    // This preserves the customer's cart across failed or abandoned payment attempts.
 
     res.status(201).json({
       success: true,
-      message: 'Order created successfully',
+      message: 'Order created successfully. Awaiting payment.',
       order: createdOrder,
       discountApplied: discountAmount,
       coupon: appliedCoupon,
     });
 
-    // Asynchronously dispatch background side-effects (Email, Push, Invoice) without blocking response
-    const queueService = require('../services/queueService');
-    queueService.dispatchOrderProcessing(createdOrder, req.user);
+    // If COD, dispatch order processing immediately. For online UPI, dispatch only upon verified payment
+    if (paymentMethod === 'COD') {
+      const queueService = require('../services/queueService');
+      queueService.dispatchOrderProcessing(createdOrder, req.user);
+    }
   } catch (error) {
     // Rollback deducted inventory if order creation fails midway
     for (const item of deductedItems) {
@@ -182,9 +191,28 @@ const getMyOrders = async (req, res) => {
 // @route GET /api/orders/:id
 const getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
+    const paramId = req.params.id;
+    const isObjectId = typeof paramId === 'string' && /^[0-9a-fA-F]{24}$/.test(paramId);
+
+    let order = await Order.findOne({
+      $or: [
+        ...(isObjectId ? [{ _id: paramId }] : []),
+        { order_id: paramId },
+      ],
+    })
       .populate('user', 'name email phone')
       .populate('orderItems.product');
+
+    // If still not found, check if parameter was a CheckoutSession
+    if (!order && isObjectId) {
+      const CheckoutSession = require('../models/CheckoutSession');
+      const session = await CheckoutSession.findById(paramId);
+      if (session && session.order_id) {
+        order = await Order.findOne({ order_id: session.order_id })
+          .populate('user', 'name email phone')
+          .populate('orderItems.product');
+      }
+    }
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -204,11 +232,19 @@ const getOrderById = async (req, res) => {
   }
 };
 
-// @desc Cancel an order (Allowed only if Pending or Processing; restores inventory)
+// @desc Cancel an order (Allowed only if Pending, Placed, or Processing; restores inventory)
 // @route PUT /api/orders/:id/cancel
 const cancelOrder = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const mongoose = require('mongoose');
+    const validMongoId = mongoose.Types.ObjectId.isValid(req.params.id) ? req.params.id : null;
+    const order = await Order.findOne({
+      $or: [
+        ...(validMongoId ? [{ _id: validMongoId }] : []),
+        { order_id: req.params.id },
+      ],
+    });
+
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -220,7 +256,7 @@ const cancelOrder = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to cancel this order' });
     }
 
-    if (!['Pending', 'Processing'].includes(order.orderStatus)) {
+    if (!['Pending', 'Placed', 'Processing'].includes(order.orderStatus)) {
       return res.status(400).json({
         message: `Cannot cancel an order that is already '${order.orderStatus}'.`,
       });
@@ -239,6 +275,39 @@ const cancelOrder = async (req, res) => {
     res.json({ success: true, message: 'Order has been cancelled and inventory restored.', order });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc Switch an unpaid order to Cash on Delivery (COD)
+// @route PUT /api/orders/:id/switch-cod
+const switchOrderToCod = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const isOwner = order.user.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to modify this order' });
+    }
+
+    if (order.isPaid) {
+      return res.status(400).json({ success: false, message: 'Order is already marked as paid.' });
+    }
+
+    order.paymentMethod = 'COD';
+    order.orderStatus = 'Processing';
+    await order.save();
+
+    const queueService = require('../services/queueService');
+    queueService.dispatchOrderProcessing(order, req.user);
+
+    res.json({ success: true, message: 'Order switched to Cash on Delivery successfully.', order });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -295,6 +364,7 @@ module.exports = {
   getMyOrders,
   getOrderById,
   cancelOrder,
+  switchOrderToCod,
   updateOrderStatus,
   getAllOrders,
 };

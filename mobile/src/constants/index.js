@@ -11,15 +11,27 @@ const normalizeApiUrl = (url) => {
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 };
 
+const getLocalBackendUrl = () => {
+  // In production builds / release APK, fall back to persistent hosted backend
+  if (typeof __DEV__ !== 'undefined' && !__DEV__) {
+    return 'https://tech-crate.onrender.com/api';
+  }
+  // In Android emulator, 10.0.2.2 maps to the computer's localhost:5000
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:5000/api';
+  }
+  return 'http://localhost:5000/api';
+};
+
 export const API_BASE_URL =
-  normalizeApiUrl(rawApiUrl) || 'https://tech-crate.onrender.com/api';
+  normalizeApiUrl(rawApiUrl) || getLocalBackendUrl();
 
 export const API_TIMEOUT = 45000;
 
 // App Constants
 export const APP_NAME = 'Tech Crate';
 export const APP_TAGLINE = 'Everything You Need to Build.';
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '0.1.2';
 
 // Storage Keys
 export const STORAGE_KEYS = {
@@ -32,6 +44,9 @@ export const STORAGE_KEYS = {
   ONBOARDING_DONE: '@techcrate/onboarding_done',
   SEARCH_HISTORY: '@techcrate/search_history',
   NOTIFICATIONS: '@techcrate/notifications',
+  PRODUCTS_CACHE: '@techcrate/products_cache',
+  PROJECTS_CACHE: '@techcrate/projects_cache',
+  POSTERS_CACHE: '@techcrate/posters_cache',
 };
 
 // User Roles
@@ -62,12 +77,25 @@ export const PAYMENT_STATUS = {
   REFUNDED: 'refunded',
 };
 
-// Payment Methods
+// Payment Methods (UPI & Cash on Delivery)
 export const PAYMENT_METHODS = {
-  RAZORPAY: 'razorpay',
   UPI: 'upi',
-  CARD: 'card',
   COD: 'cod',
+};
+
+// Merchant UPI Configuration for Direct Google Pay / UPI Checkout
+const envUpiVpa =
+  (typeof process !== 'undefined' &&
+    process.env &&
+    (process.env.EXPO_PUBLIC_MERCHANT_UPI_VPA ||
+      process.env.MERCHANT_UPI_VPA ||
+      process.env.UPI_VPA)) ||
+  null;
+
+export const MERCHANT_CONFIG = {
+  UPI_VPA: envUpiVpa || '8329276568@ptyes',
+  PAYEE_NAME: 'Tech Crate',
+  MERCHANT_CODE: '5411',
 };
 
 // Difficulty Levels

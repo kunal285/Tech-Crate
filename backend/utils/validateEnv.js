@@ -4,6 +4,14 @@
  */
 
 const validateEnv = () => {
+  const insecureDefaults = [
+    'your_jwt_secret_key_here',
+    'secret',
+    'TechCrate_jwt_secret_key_2026',
+    'replace_me',
+    'test_secret',
+  ];
+
   if (process.env.NODE_ENV === 'production') {
     const required = ['JWT_SECRET', 'MONGO_URI'];
     const missing = required.filter((key) => !process.env[key]);
@@ -11,7 +19,7 @@ const validateEnv = () => {
       console.error(`[FATAL] Missing mandatory production environment variables: ${missing.join(', ')}`);
       process.exit(1);
     }
-    if (process.env.JWT_SECRET === 'your_jwt_secret_key_here' || process.env.JWT_SECRET === 'secret') {
+    if (insecureDefaults.includes(process.env.JWT_SECRET)) {
       console.error('[FATAL] Insecure default JWT_SECRET detected in production environment.');
       process.exit(1);
     }

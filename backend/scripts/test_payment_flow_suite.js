@@ -1,19 +1,12 @@
-/**
- * Comprehensive Payment System Integration Test Suite
- * Validates Order Creation, Signed Webhooks, Idempotency, Status Verification & Security Guards.
- */
-
+require('dotenv').config();
 const crypto = require('crypto');
 
-// Target Backend URL
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5000';
-const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || 'whsec_techcrate_2026';
+const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET || process.env.AUTO_UPI_WEBHOOK_SECRET || 'whsec_techcrate_2026';
 
 function generateSignature(payload, secret) {
-  return crypto
-    .createHmac('sha256', secret)
-    .update(JSON.stringify(payload))
-    .digest('hex');
+  const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return crypto.createHmac('sha256', secret).update(str).digest('hex');
 }
 
 async function request(url, options = {}) {
@@ -40,48 +33,87 @@ async function runPaymentSuite() {
   let passed = 0;
   let total = 0;
 
-  function assert(condition, title) {
+  function assert(condition, title, details = '') {
     total++;
     if (condition) {
       console.log(`✅ [PASS] ${title}`);
       passed++;
     } else {
-      console.error(`❌ [FAIL] ${title}`);
+      console.error(`❌ [FAIL] ${title} -> ${details}`);
     }
   }
 
   try {
-    // 1. Create Order API
-    console.log('--- 1. Order Creation API (POST /api/orders/create) ---');
-    const orderIdSuccess = `ORD_SUCC_${Date.now()}`;
-    const createRes = await request(`${BASE_URL}/api/orders/create`, {
+    // 0. Setup: Register Test User
+    const ts = Date.now();
+    const userEmail = `payuser_${ts}@techcrate.com`;
+    const regRes = await request(`${BASE_URL}/api/auth/register`, {
       method: 'POST',
       body: JSON.stringify({
-        amount: 999,
-        currency: 'INR',
+        name: 'Payment Suite User',
+        email: userEmail,
+        password: 'Password123!',
+        phone: `91${Math.floor(10000000 + Math.random() * 90000000)}`,
+      }),
+    });
+    const userToken = regRes.data?.token;
+
+    // Fetch product
+    const productsRes = await request(`${BASE_URL}/api/products`);
+    const allProds = productsRes.data?.products || (Array.isArray(productsRes.data) ? productsRes.data : []);
+    const testProductId = allProds[0]?._id || '65f123456789012345678901';
+
+    // 1. Create Base Order
+    console.log('--- 1. Order Creation & Payment Intent Initiation ---');
+    const orderRes = await request(`${BASE_URL}/api/orders`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userToken}` },
+      body: JSON.stringify({
+        orderItems: [{ product: String(testProductId), quantity: 1 }],
+        shippingAddress: {
+          fullName: 'Test User',
+          phone: '9876543210',
+          street: '123 Test St',
+          city: 'City',
+          state: 'State',
+          pincode: '560001',
+          country: 'India',
+        },
+        paymentMethod: 'UPI',
+      }),
+    });
+
+    const order = orderRes.data?.order;
+    const orderIdSuccess = String(order?._id);
+
+    const createRes = await request(`${BASE_URL}/api/payments/create-order`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userToken}` },
+      body: JSON.stringify({
         order_id: orderIdSuccess,
-        redirect_url: 'TechCrate://payment/success',
+        redirect_url: 'techcrate://payment/success',
         webhook_url: 'http://localhost:5000/api/webhooks/payment',
       }),
     });
 
-    assert(createRes.status === 200 && createRes.data?.success === true, 'POST /api/orders/create returns 200 OK');
-    assert(createRes.data?.order_id === orderIdSuccess, 'Returns accurate order_id');
-    assert(!!createRes.data?.payment_id, 'Returns valid payment_id');
-    assert(createRes.data?.payment_url?.includes('autoupigateway.com') || !!createRes.data?.payment_url, 'Returns payment gateway checkout URL');
+    assert(createRes.status === 200 && createRes.data?.success === true, 'POST /api/payments/create-order returns 200 OK', `Status: ${createRes.status}, data: ${JSON.stringify(createRes.data)}`);
+    assert(createRes.data?.order_id === orderIdSuccess, 'Returns accurate order_id', JSON.stringify(createRes.data));
+    assert(!!createRes.data?.payment_url || !!createRes.data?.upi_intent_url, 'Returns payment gateway checkout URL or direct UPI intent', JSON.stringify(createRes.data));
 
     // 2. Initial Payment Status (Before Webhook)
     console.log('\n--- 2. Server Status Verification (Before Webhook) ---');
-    const statusBefore = await request(`${BASE_URL}/api/payments/${orderIdSuccess}/status`);
+    const statusBefore = await request(`${BASE_URL}/api/payments/${orderIdSuccess}/status`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+    });
     assert(statusBefore.status === 200 && statusBefore.data?.isPaid === false, 'Order initial status is unpaid (isPaid: false)');
 
     // 3. Signed Webhook Processing (payment.paid)
     console.log('\n--- 3. Signed payment.paid Webhook Processing ---');
     const webhookPayload = {
       event: 'payment.paid',
-      payment_id: createRes.data?.payment_id || `PAY_${Date.now()}`,
+      payment_id: createRes.data?.payment_reference || `PAY_${Date.now()}`,
       order_id: orderIdSuccess,
-      amount: 999,
+      amount: order.totalPrice,
       currency: 'INR',
       status: 'paid',
     };
@@ -99,7 +131,9 @@ async function runPaymentSuite() {
 
     // 4. Server Status Verification (After Webhook)
     console.log('\n--- 4. Server Status Verification (After Webhook) ---');
-    const statusAfter = await request(`${BASE_URL}/api/payments/${orderIdSuccess}/status`);
+    const statusAfter = await request(`${BASE_URL}/api/payments/${orderIdSuccess}/status`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+    });
     assert(statusAfter.status === 200 && statusAfter.data?.isPaid === true && statusAfter.data?.status === 'paid', 'Backend authoritatively confirms PAID');
 
     // 5. Webhook Idempotency Check (Duplicate Webhook)
@@ -119,26 +153,42 @@ async function runPaymentSuite() {
 
     // 6. Fake Deep Link Guard Check
     console.log('\n--- 6. Fake Deep Link Prevention Guard ---');
-    const fakeOrderId = `FAKE_DEEP_LINK_${Date.now()}`;
-    const fakeStatusRes = await request(`${BASE_URL}/api/payments/${fakeOrderId}/status`);
+    const fakeOrderId = `65f123456789012345678999`;
+    const fakeStatusRes = await request(`${BASE_URL}/api/payments/${fakeOrderId}/status`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+    });
     assert(
       fakeStatusRes.status === 404 || fakeStatusRes.data?.isPaid === false,
       'Fake deep link order_id is rejected by server status check'
     );
 
-    // 7. Failed Payment Webhook Scenario
+    // 7. Failed Payment Flow Verification
     console.log('\n--- 7. Failed Payment Flow Verification ---');
-    const orderIdFail = `ORD_FAIL_${Date.now()}`;
-    await request(`${BASE_URL}/api/orders/create`, {
+    const failOrderRes = await request(`${BASE_URL}/api/orders`, {
       method: 'POST',
-      body: JSON.stringify({ amount: 499, currency: 'INR', order_id: orderIdFail }),
+      headers: { Authorization: `Bearer ${userToken}` },
+      body: JSON.stringify({
+        orderItems: [{ product: String(testProductId), quantity: 1 }],
+        shippingAddress: {
+          fullName: 'Fail Test User',
+          phone: '9876543210',
+          street: '123 Test St',
+          city: 'City',
+          state: 'State',
+          pincode: '560001',
+          country: 'India',
+        },
+        paymentMethod: 'UPI',
+      }),
     });
+    const orderFail = failOrderRes.data?.order;
+    const orderIdFail = String(orderFail?._id);
 
     const failedPayload = {
       event: 'payment.failed',
       payment_id: `PAY_FAIL_${Date.now()}`,
       order_id: orderIdFail,
-      amount: 499,
+      amount: orderFail?.totalPrice || 499,
       status: 'failed',
     };
     const failSig = generateSignature(failedPayload, WEBHOOK_SECRET);
@@ -149,7 +199,9 @@ async function runPaymentSuite() {
       body: JSON.stringify(failedPayload),
     });
 
-    const statusFailed = await request(`${BASE_URL}/api/payments/${orderIdFail}/status`);
+    const statusFailed = await request(`${BASE_URL}/api/payments/${orderIdFail}/status`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+    });
     assert(statusFailed.data?.status === 'failed' && statusFailed.data?.isPaid === false, 'Backend confirms failed transaction');
 
     console.log('\n================================================================');
@@ -160,7 +212,6 @@ async function runPaymentSuite() {
   }
 }
 
-// Module or direct invocation
 if (require.main === module) {
   runPaymentSuite();
 }

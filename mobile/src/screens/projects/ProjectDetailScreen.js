@@ -12,6 +12,7 @@ import {
 import { colors } from '../../theme/colors';
 import Header from '../../components/common/Header';
 import Button from '../../components/common/Button';
+import SafeImage from '../../components/common/SafeImage';
 import { useCartStore } from '../../store/cartStore';
 
 export default function ProjectDetailScreen({ route, navigation }) {
@@ -59,7 +60,7 @@ export default function ProjectDetailScreen({ route, navigation }) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {activeTab === 'Overview' && (
           <View style={styles.section}>
-            <Image source={{ uri: project.images?.[0] || 'https://via.placeholder.com/300' }} style={styles.heroImage} />
+            <SafeImage source={project.images?.[0] || 'https://via.placeholder.com/300'} style={styles.heroImage} />
             <Text style={styles.title}>{project.title}</Text>
             <Text style={styles.description}>{project.description}</Text>
 
@@ -92,8 +93,8 @@ export default function ProjectDetailScreen({ route, navigation }) {
         {activeTab === 'Circuit' && (
           <View style={styles.section}>
             <Text style={styles.sectionHeading}>Schematic & Pinout Diagram</Text>
-            <Image
-              source={{ uri: project.circuitDiagramUrl || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80' }}
+            <SafeImage
+              source={project.circuitDiagramUrl || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80'}
               style={styles.circuitImage}
             />
             <Text style={styles.circuitNote}>Ensure 3.3V / 5V voltage rails match component ratings before powering on.</Text>

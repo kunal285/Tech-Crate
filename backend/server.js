@@ -18,8 +18,11 @@ const app = express();
 // Trust reverse proxy for rate limiting if behind Nginx/Cloudflare
 app.set('trust proxy', 1);
 
-// Connect Database
+// Connect Database (Atlas test & TechCrate sync)
 connectDB();
+
+// Start Background Jobs
+require('./services/checkoutCleanupService');
 
 // Production Security Headers via Helmet
 app.use(
@@ -87,26 +90,45 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Idempotency-Key', 'X-Request-ID'],
   })
 );
 
 // Body Parsers with payload size limits (protect against large body Denial of Service)
-app.use(express.json({ limit: '1mb' }));
+// Captures rawBody buffer for cryptographic payment webhook signature verification (Razorpay)
+app.use(
+  express.json({
+    limit: '1mb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Apply general API Rate Limiter
-app.use('/api/', apiLimiter);
+// Standardized Response & Request-ID Tracking Middleware
+const responseEnvelope = require('./middleware/responseEnvelope');
+app.use(responseEnvelope);
 
-// Routes
+// Apply general API Rate Limiter
+app.use(['/api/', '/api/v1/'], apiLimiter);
+
+// ── Versioned Routes (/api/v1) ─────────────────────────────────────────────
+app.use('/api/v1', require('./routes/v1Router'));
+
+// ── Backward-Compatible Routes (/api for legacy apps) ──────────────────────
+app.get('/api/app-version', (req, res) => {
+  return res.redirect(307, '/api/v1/app-version');
+});
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/cart', require('./routes/cartRoutes'));
+app.use('/api/checkout', require('./routes/checkoutRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/seller', require('./routes/sellerRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
@@ -115,8 +137,9 @@ app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/posters', require('./routes/posterRoutes'));
 app.use('/api/banners', require('./routes/posterRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
-app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use(['/api/payments', '/api/payment'], require('./routes/paymentRoutes'));
 app.use('/api/webhooks', require('./routes/paymentRoutes'));
+app.use(['/payment-success', '/payment-failed'], require('./routes/paymentRoutes'));
 
 // Interactive Swagger / OpenAPI Documentation
 const swaggerUi = require('swagger-ui-express');
@@ -160,6 +183,10 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`[TechCrate Server] Running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[TechCrate Server] Running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  });
+}
+
+module.exports = app;

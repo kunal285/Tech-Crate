@@ -24,7 +24,7 @@ const registerSellerStore = async (req, res) => {
 
 const getSellerDashboard = async (req, res) => {
   try {
-    const products = await Product.find({ seller: req.user._id });
+    const products = await Product.find({ seller: req.user._id, isArchived: { $ne: true } });
     const sellerProductIds = products.map((p) => p._id);
     const orders = await Order.find({ 'orderItems.product': { $in: sellerProductIds } });
 

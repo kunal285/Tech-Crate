@@ -18,6 +18,7 @@ export const isNativeGoogleSignInAvailable = () => {
 
 let googleSigninModule = null;
 let statusCodes = null;
+let isGoogleConfigured = false;
 
 const loadGoogleSignIn = () => {
   if (googleSigninModule) return googleSigninModule;

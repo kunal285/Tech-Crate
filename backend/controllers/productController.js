@@ -1,17 +1,28 @@
 const Product = require('../models/Product');
+const Order = require('../models/Order');
 
 // @desc Fetch all products with search, category filtering & pagination
 // @route GET /api/products
 const getProducts = async (req, res) => {
   try {
-    const { keyword, category, page, limit } = req.query;
+    const { keyword, q, category, page, limit, includeArchived, status } = req.query;
+    const searchTerm = (keyword || q || '').trim();
     let query = {};
 
-    if (keyword) {
+    // By default, exclude archived/soft-deleted products from public catalog
+    if (includeArchived !== 'true') {
+      query.isArchived = { $ne: true };
+    }
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (searchTerm) {
       query.$or = [
-        { title: { $regex: keyword, $options: 'i' } },
-        { description: { $regex: keyword, $options: 'i' } },
-        { sku: { $regex: keyword, $options: 'i' } },
+        { title: { $regex: searchTerm, $options: 'i' } },
+        { description: { $regex: searchTerm, $options: 'i' } },
+        { sku: { $regex: searchTerm, $options: 'i' } },
       ];
     }
 
@@ -51,6 +62,10 @@ const getProductById = async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
+    }
+    // If archived and request is from customer-facing view, return not found
+    if (product.isArchived && req.query.includeArchived !== 'true') {
+      return res.status(404).json({ message: 'This hardware component is archived and no longer available in the active catalog.' });
     }
     res.json(product);
   } catch (error) {
@@ -119,6 +134,11 @@ const createProduct = async (req, res) => {
 
     const product = new Product({
       ...data,
+      specifications: data.specifications || {},
+      sku: data.sku ? String(data.sku).trim().toUpperCase() : undefined,
+      datasheetUrl: data.datasheetUrl || '',
+      isArchived: false,
+      status: 'active',
       stock: Math.max(0, Number(data.stock) || 0),
       rating: data.rating || 4.5,
       reviewCount: data.reviewCount || 0,
@@ -141,7 +161,7 @@ const updateProduct = async (req, res) => {
     }
 
     // Authorization check: If user is seller, verify ownership
-    if (req.user.role === 'seller' && product.seller) {
+    if (req.user && req.user.role === 'seller' && product.seller) {
       if (product.seller.toString() !== req.user._id.toString()) {
         return res.status(403).json({ message: 'Forbidden: You can only edit your own products' });
       }
@@ -180,6 +200,16 @@ const updateProduct = async (req, res) => {
       data.stock = Math.max(0, Number(data.stock));
     }
 
+    if (data.sku) {
+      data.sku = String(data.sku).trim().toUpperCase();
+    }
+
+    // Allow unarchiving or explicit status toggle
+    if (data.isArchived !== undefined) {
+      product.isArchived = Boolean(data.isArchived);
+      product.status = data.isArchived ? 'archived' : 'active';
+    }
+
     Object.assign(product, data);
     const updatedProduct = await product.save();
     res.json(updatedProduct);
@@ -188,7 +218,7 @@ const updateProduct = async (req, res) => {
   }
 };
 
-// @desc Delete product from MongoDB (Admin / Authorized Seller)
+// @desc Delete or Archive product from MongoDB (Admin / Authorized Seller)
 // @route DELETE /api/products/:id
 const deleteProduct = async (req, res) => {
   try {
@@ -198,14 +228,41 @@ const deleteProduct = async (req, res) => {
     }
 
     // Authorization check for seller
-    if (req.user.role === 'seller' && product.seller) {
+    if (req.user && req.user.role === 'seller' && product.seller) {
       if (product.seller.toString() !== req.user._id.toString()) {
         return res.status(403).json({ message: 'Forbidden: You can only delete your own products' });
       }
     }
 
-    await product.deleteOne();
-    res.json({ success: true, message: 'Product removed successfully' });
+    const isPermanent = req.query.permanent === 'true';
+
+    // Verify whether this product is part of historical customer orders
+    const hasOrderReferences = await Order.exists({ 'orderItems.product': req.params.id });
+
+    if (isPermanent && !hasOrderReferences) {
+      // Safe to permanently purge because no orders depend on it
+      await product.deleteOne();
+      return res.json({
+        success: true,
+        message: 'Product permanently purged from catalog and database.',
+        isArchived: false,
+        deleted: true,
+      });
+    }
+
+    // Default safe archival: preserve historical references while removing from active catalog
+    product.isArchived = true;
+    product.status = 'archived';
+    await product.save();
+
+    res.json({
+      success: true,
+      message: hasOrderReferences
+        ? 'Product was referenced in past orders and has been safely archived to preserve customer purchase history.'
+        : 'Product archived successfully and removed from active customer catalog.',
+      isArchived: true,
+      preservedForOrders: Boolean(hasOrderReferences),
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

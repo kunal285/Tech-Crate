@@ -19,10 +19,22 @@ export default function PaymentProcessingScreen({ route, navigation }) {
       if (!targetOrderId) return;
       try {
         setChecking(true);
-        const res = await paymentService.getPaymentStatus(targetOrderId);
+        let res = await paymentService.getPaymentStatus(targetOrderId);
+        if (!res?.isPaid && attempt >= 2) {
+          try {
+            const verifyRes = await paymentService.verifyPayment({
+              session_id: targetOrderId,
+              order_id: targetOrderId,
+            });
+            if (verifyRes && verifyRes.isPaid) {
+              res = verifyRes;
+            }
+          } catch {}
+        }
+
         if (res && res.isPaid) {
           navigation.replace('PaymentResult', {
-            order_id: targetOrderId,
+            order_id: res.final_order_id || targetOrderId,
             status: 'paid',
             paymentDetails: res,
           });

@@ -1,82 +1,171 @@
 # Environment & Secrets
 .env
 .env.*
-!.env.example
+.env*.local
+*.env
+*.env.*
 *.env.local
 *.env.development.local
 *.env.test.local
 *.env.production.local
+**/.env
+**/.env.*
+**/.env*.local
+!.env.example
+!**/.env.example
 local.properties
+**/local.properties
+*.pem
+*.key
 
 # Dependency Directories
 node_modules/
 **/node_modules/
+.pnpm-store/
+**/.pnpm-store/
 
 # Build Outputs & Bundles
 dist/
 **/dist/
 build/
 **/build/
+.next/
+**/.next/
+out/
+**/out/
+.turbo/
+**/.turbo/
 .vite/
 **/.vite/
 *.jsbundle
+**/*.jsbundle
+**/*.jsbundle.map
+**/index.android.bundle
+**/index.android.bundle.map
+**/index.ios.bundle
+**/index.ios.bundle.map
 android/app/src/main/assets/index.android.bundle
 android/app/src/main/assets/index.android.bundle.map
+**/android/app/src/main/assets/index.android.bundle
+**/android/app/src/main/assets/index.android.bundle.map
+
+# Backend Uploads
 backend/uploads/*
 !backend/uploads/.gitkeep
+**/uploads/*
+!**/uploads/.gitkeep
 
 # Logs & Caches
+*.log
+**/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 .metro-health-check*
+**/.metro-health-check*
+.metro-cache/
+**/.metro-cache/
 .eslintcache
+**/.eslintcache
 .cache/
+**/.cache/
 coverage/
+**/coverage/
+.nyc_output/
+**/.nyc_output/
+tmp/
+**/tmp/
+temp/
+**/temp/
 
 # Android
 .gradle/
 **/.gradle/
 .cxx/
 **/.cxx/
+**/android/app/build/
+**/android/build/
 *.apk
+**/*.apk
 *.aab
+**/*.aab
 *.keystore
+**/*.keystore
 !debug.keystore
+!**/debug.keystore
+*.jks
+**/*.jks
 .kotlin/
 **/.kotlin/
+captures/
+**/captures/
 
-# iOS & Xcode
+# iOS, Xcode & Bundler
 **/Pods/
-/vendor/bundle/
+.bundle/
+**/.bundle/
+vendor/bundle/
+**/vendor/bundle/
 *.pbxuser
 !default.pbxuser
+!**/default.pbxuser
 *.mode1v3
 !default.mode1v3
+!**/default.mode1v3
 *.mode2v3
 !default.mode2v3
+!**/default.mode2v3
 *.perspectivev3
 !default.perspectivev3
+!**/default.perspectivev3
 xcuserdata/
+**/xcuserdata/
 *.xccheckout
+**/*.xccheckout
 *.moved-aside
+**/*.moved-aside
 DerivedData/
+**/DerivedData/
 *.hmap
+**/*.hmap
 *.ipa
+**/*.ipa
 *.xcuserstate
+**/*.xcuserstate
 **/.xcode.env.local
 
-# IDEs & OS System Files
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.iml
-*.hprof
+# Fastlane
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
 
+# IDEs, Editors & OS System Files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+**/Thumbs.db
+ehthumbs.db
+**/ehthumbs.db
+Desktop.ini
+**/Desktop.ini
+$RECYCLE.BIN/
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
+*.iml
+**/*.iml
+*.hprof
+**/*.hprof
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~

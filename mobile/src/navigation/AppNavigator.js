@@ -21,7 +21,6 @@ const linking = {
     'myapp://',
     'myapp-dev://',
     'https://techcrate.com',
-    'https://autoupigateway.com',
   ],
   config: {
     screens: {

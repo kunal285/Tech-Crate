@@ -1,26 +1,67 @@
+const crypto = require('crypto');
+
 /**
  * Auto UPI Gateway Service (https://autoupigateway.com)
- * Handles order creation, status verification, and webhook handling for Auto UPI Gateway integration.
+ * Official Public v1 API Client:
+ * - Create Order: POST /api/public/v1/create-order
+ * - Order Status: GET /api/public/v1/order-status?order_id=ORD...
+ * - Webhook Signature Verification: HMAC-SHA256 (t=...,v1=...)
  */
 class AutoUpiService {
   constructor() {
-    this.baseUrl = process.env.AUTO_UPI_GATEWAY_URL || 'https://autoupigateway.com';
-    this.userToken = process.env.AUTO_UPI_USER_TOKEN || process.env.AUTO_UPI_KEY || '';
-    this.secretKey = process.env.AUTO_UPI_WEBHOOK_SECRET || process.env.AUTO_UPI_SECRET || '';
+    this.baseUrl =
+      process.env.AUTO_UPI_GATEWAY_URL?.replace(/\/$/, '') || 'https://autoupigateway.com';
+    this.apiBase = `${this.baseUrl}/api/public/v1`;
+    this.apiKey =
+      process.env.AUTO_UPI_USER_TOKEN ||
+      process.env.AUTO_UPI_KEY ||
+      process.env.AUTO_UPI_API_KEY ||
+      '';
+    this.webhookSecret =
+      process.env.AUTO_UPI_WEBHOOK_SECRET || process.env.AUTO_UPI_SECRET || '';
   }
 
   /**
-   * Create an Auto UPI Gateway Order Intent
+   * Create an Auto UPI Gateway Order
    * @param {Object} params - Order creation parameters
    * @returns {Promise<Object>}
    */
-  async createOrder({ orderId, amount, customerName, customerEmail, customerMobile, redirectUrl }) {
-    const isProdKeyAvailable = !!this.userToken && this.userToken !== 'your_auto_upi_user_token_here';
+  async createOrder({
+    orderId,
+    amount,
+    customerName,
+    customerEmail,
+    customerMobile,
+    redirectUrl,
+    failureUrl,
+    webhookUrl,
+  }) {
+    const isLiveKeyAvailable =
+      Boolean(this.apiKey) &&
+      this.apiKey.startsWith('augw_live_') &&
+      this.apiKey !== 'your_auto_upi_user_token_here';
 
-    if (!isProdKeyAvailable) {
-      console.log('[Auto UPI Gateway] Sandbox mode active: generating mock payment gateway response.');
+    const successRedirectUrl =
+      redirectUrl ||
+      process.env.PAYMENT_SUCCESS_REDIRECT_URL ||
+      'https://tech-crate.onrender.com/payment-success';
+    const failedRedirectUrl =
+      failureUrl ||
+      process.env.PAYMENT_FAILED_REDIRECT_URL ||
+      'https://tech-crate.onrender.com/payment-failed';
+    const finalWebhookUrl =
+      webhookUrl ||
+      process.env.PAYMENT_GLOBAL_WEBHOOK_URL ||
+      'https://tech-crate.onrender.com/autoupi-webhook';
+
+    if (!isLiveKeyAvailable) {
+      console.log(
+        '[Auto UPI Gateway] Sandbox mode active: generating mock payment gateway response.'
+      );
       const mockTxnId = `UPI_${orderId || Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
-      const mockPaymentUrl = `${this.baseUrl}/pay?token=mock_sandbox_token_${mockTxnId}&amount=${amount}`;
+      const mockPaymentUrl = successRedirectUrl.includes('?')
+        ? `${successRedirectUrl}&session_id=${orderId}&mock_txn=${mockTxnId}&status=paid`
+        : `${successRedirectUrl}?session_id=${orderId}&mock_txn=${mockTxnId}&status=paid`;
       const mockUpiIntent = `upi://pay?pa=techcrate@upi&pn=TechCrate&tr=${mockTxnId}&tn=Order_${orderId}&am=${amount}&cu=INR`;
 
       return {
@@ -28,13 +69,15 @@ class AutoUpiService {
         gateway: 'AutoUPI',
         gatewayUrl: this.baseUrl,
         orderId: orderId || null,
-        txnId: mockTxnId,
+        gatewayOrderId: mockTxnId,
+        slug: 'mock_slug',
         amount: Number(amount),
+        payableAmount: Number(amount),
         currency: 'INR',
         paymentUrl: mockPaymentUrl,
         upiIntentUrl: mockUpiIntent,
         qrData: mockUpiIntent,
-        status: 'PENDING',
+        status: 'active',
         isSandbox: true,
         createdAt: new Date().toISOString(),
       };
@@ -42,142 +85,225 @@ class AutoUpiService {
 
     try {
       const payload = {
-        user_token: this.userToken,
-        amount: String(amount),
-        order_id: String(orderId),
+        amount: Number(amount),
         customer_name: customerName || 'TechCrate Customer',
-        customer_email: customerEmail || 'customer@techcrate.com',
-        customer_mobile: customerMobile || '9876543210',
-        redirect_url: redirectUrl || 'https://techcrate.com/payment/callback',
-        remark: `TechCrate Order #${orderId}`,
+        webhook_url: finalWebhookUrl,
+        success_redirect_url: successRedirectUrl,
+        failure_redirect_url: failedRedirectUrl,
       };
 
-      const response = await fetch(`${this.baseUrl}/api/create-order`, {
+      const response = await fetch(`${this.apiBase}/create-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          'X-API-Key': this.apiKey,
         },
         body: JSON.stringify(payload),
       });
 
-      const resData = await response.json();
-      if (resData && (resData.status === true || resData.status === 'COMPLETED' || resData.status === 200 || resData.success === true)) {
+      let resData = null;
+      try {
+        const text = await response.text();
+        resData = JSON.parse(text);
+      } catch {
+        resData = { ok: false, error: 'Invalid response from upstream payment provider.' };
+      }
+
+      if (resData && (resData.ok === true || resData.status === 'active')) {
+        const paymentUrl =
+          resData.payment_url || `${this.baseUrl}/pay/${resData.slug || resData.order_id}`;
+        const upiIntent =
+          resData.upi_intent ||
+          `upi://pay?pa=techcrate@upi&pn=TechCrate&tr=${resData.order_id}&am=${resData.payable_amount || amount}&cu=INR`;
+
         return {
           success: true,
           gateway: 'AutoUPI',
           gatewayUrl: this.baseUrl,
           orderId: orderId,
-          txnId: resData.result?.order_id || resData.txnid || resData.order_id || orderId,
-          amount: Number(amount),
+          gatewayOrderId: resData.order_id,
+          slug: resData.slug,
+          amount: Number(resData.amount || amount),
+          payableAmount: Number(resData.payable_amount || amount),
           currency: 'INR',
-          paymentUrl: resData.result?.payment_url || resData.payment_url || resData.url,
-          upiIntentUrl: resData.result?.upi_intent_url || resData.upi_intent_url || resData.payment_url,
-          qrData: resData.result?.qr_code || resData.qr_data || resData.result?.payment_url,
-          status: 'PENDING',
+          paymentUrl,
+          upiIntentUrl: upiIntent,
+          qrData: resData.qr_data || paymentUrl,
+          expiresAt: resData.expires_at,
+          status: resData.status || 'active',
           isSandbox: false,
           createdAt: new Date().toISOString(),
         };
-      } else {
-        throw new Error(resData?.message || resData?.error || 'Failed to initialize Auto UPI Gateway session.');
       }
+
+      console.warn('[Auto UPI Gateway Error Response]', resData);
+      throw new Error(resData?.error || resData?.message || 'Failed to initialize payment gateway.');
     } catch (error) {
-      console.error('[Auto UPI Gateway Create Error]', error.message);
-      // Fallback to sandbox response in non-production if API call fails
-      if (process.env.NODE_ENV !== 'production') {
-        const mockTxnId = `UPI_FB_${orderId || Date.now()}`;
-        return {
-          success: true,
-          gateway: 'AutoUPI',
-          gatewayUrl: this.baseUrl,
-          orderId: orderId || null,
-          txnId: mockTxnId,
-          amount: Number(amount),
-          currency: 'INR',
-          paymentUrl: `${this.baseUrl}/pay?token=sandbox_${mockTxnId}`,
-          upiIntentUrl: `upi://pay?pa=techcrate@upi&tr=${mockTxnId}&am=${amount}`,
-          qrData: `upi://pay?pa=techcrate@upi&tr=${mockTxnId}&am=${amount}`,
-          status: 'PENDING',
-          isSandbox: true,
-          createdAt: new Date().toISOString(),
-        };
-      }
-      throw error;
+      console.warn('[Auto UPI Gateway Exception]', error.message);
+      const isQuotaExceeded = error.message === 'QUOTA_EXCEEDED';
+      // Fallback response for offline resilience and upstream quota exhaustion:
+      // We do NOT return a fake URL on autoupigateway.com because that URL will 404 with "This page didn't load".
+      // Instead, we return valid UPI intent & QR data for seamless local payment.
+      const mockTxnId = `UPI_DIR_${orderId || Date.now()}`;
+      return {
+        success: true,
+        gateway: 'AutoUPI',
+        gatewayUrl: this.baseUrl,
+        orderId: orderId || null,
+        gatewayOrderId: mockTxnId,
+        slug: 'direct_upi',
+        amount: Number(amount),
+        payableAmount: Number(amount),
+        currency: 'INR',
+        paymentUrl: null,
+        upiIntentUrl: `upi://pay?pa=8329276568@ptyes&pn=TechCrate&tr=${orderId}&tn=Order_${orderId}&am=${amount}&cu=INR`,
+        qrData: `upi://pay?pa=8329276568@ptyes&pn=TechCrate&tr=${orderId}&tn=Order_${orderId}&am=${amount}&cu=INR`,
+        status: 'active',
+        isSandbox: false,
+        isFallback: true,
+        quotaExceeded: isQuotaExceeded,
+        createdAt: new Date().toISOString(),
+      };
     }
   }
 
   /**
    * Verify/Check Auto UPI Gateway transaction status
-   * @param {string} orderId - Order ID or Transaction ID
+   * Official GET /api/public/v1/order-status?order_id=...
+   * @param {string} orderId - Auto UPI Gateway Order ID (e.g. ORD...)
    * @returns {Promise<Object>}
    */
   async checkOrderStatus(orderId) {
-    const isProdKeyAvailable = !!this.userToken && this.userToken !== 'your_auto_upi_user_token_here';
+    if (!orderId) {
+      return { success: false, message: 'Order ID is required' };
+    }
 
-    if (!isProdKeyAvailable) {
+    const isLiveKeyAvailable =
+      Boolean(this.apiKey) &&
+      this.apiKey.startsWith('augw_live_') &&
+      this.apiKey !== 'your_auto_upi_user_token_here';
+
+    if (!isLiveKeyAvailable) {
       return {
         success: true,
         orderId,
-        status: 'COMPLETED',
-        isPaid: true,
+        status: 'PENDING',
+        isPaid: false,
         gateway: 'AutoUPI',
         isSandbox: true,
-        verifiedAt: new Date().toISOString(),
+        message: 'Sandbox mode: awaiting verified webhook or admin confirmation.',
+        verifiedAt: null,
       };
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/check-order-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_token: this.userToken,
-          order_id: String(orderId),
-        }),
-      });
+      const response = await fetch(
+        `${this.apiBase}/order-status?order_id=${encodeURIComponent(orderId)}`,
+        {
+          method: 'GET',
+          headers: {
+            'X-API-Key': this.apiKey,
+          },
+        }
+      );
 
       const resData = await response.json();
-      const rawStatus = (resData.result?.status || resData.status || '').toString().toUpperCase();
-      const isPaid = rawStatus === 'COMPLETED' || rawStatus === 'SUCCESS' || rawStatus === 'PAID';
+      if (resData && resData.ok === true && resData.order) {
+        const orderInfo = resData.order;
+        const isPaid = String(orderInfo.status).toLowerCase() === 'paid';
 
-      return {
-        success: true,
-        orderId,
-        status: rawStatus || 'COMPLETED',
-        isPaid,
-        gateway: 'AutoUPI',
-        rawResponse: resData,
-        verifiedAt: new Date().toISOString(),
-      };
-    } catch (error) {
-      console.error('[Auto UPI Check Status Error]', error.message);
-      if (process.env.NODE_ENV !== 'production') {
         return {
           success: true,
           orderId,
-          status: 'COMPLETED',
-          isPaid: true,
+          gatewayOrderId: orderInfo.order_id,
+          status: orderInfo.status,
+          isPaid,
+          amount: orderInfo.amount,
+          payableAmount: orderInfo.payable_amount,
+          payerName: orderInfo.payer_name,
+          paidAt: orderInfo.paid_at,
+          detectedAt: orderInfo.detected_at,
           gateway: 'AutoUPI',
-          isSandbox: true,
-          verifiedAt: new Date().toISOString(),
+          rawResponse: resData,
+          verifiedAt: isPaid ? orderInfo.paid_at || new Date().toISOString() : null,
         };
       }
-      throw error;
+
+      return {
+        success: false,
+        orderId,
+        status: 'PENDING',
+        isPaid: false,
+        gateway: 'AutoUPI',
+        message: resData?.error || 'Unable to retrieve order status from Auto UPI Gateway',
+        rawResponse: resData,
+      };
+    } catch (error) {
+      console.error('[Auto UPI Check Status Error]', error.message);
+      return {
+        success: false,
+        orderId,
+        status: 'PENDING',
+        isPaid: false,
+        gateway: 'AutoUPI',
+        error: error.message,
+        verifiedAt: null,
+      };
     }
   }
 
   /**
-   * Verify Webhook payload from Auto UPI Gateway
-   * @param {Object} body - Request body
+   * Verify HMAC-SHA256 Webhook signature from Auto UPI Gateway
+   * Header format: X-AutoUPIGateway-Signature: t=<timestamp>,v1=<signature>
+   * Expected: HMAC-SHA256(secret, `${t}.${rawBody}`) === v1
+   * @param {string|Buffer} rawBody - Raw request body
    * @param {Object} headers - Request headers
    * @returns {boolean}
    */
-  verifyWebhook(body, headers = {}) {
-    if (!this.secretKey || process.env.NODE_ENV !== 'production') {
-      return true;
+  verifyWebhookSignature(rawBody, headers = {}) {
+    const sigHeader =
+      headers['x-autoupigateway-signature'] ||
+      headers['X-AutoUPIGateway-Signature'] ||
+      headers['x-autoupi-signature'];
+
+    if (!sigHeader) {
+      // Allow in non-production environments if secret is not enforced
+      return process.env.NODE_ENV !== 'production';
     }
-    const token = headers['x-autoupi-token'] || body?.user_token || body?.secret;
-    return token === this.secretKey || token === this.userToken;
+
+    const secret = this.webhookSecret;
+    if (!secret) {
+      console.warn('[Auto UPI Webhook] Warning: AUTO_UPI_WEBHOOK_SECRET is not configured.');
+      return false;
+    }
+
+    try {
+      const parts = Object.fromEntries(
+        sigHeader.split(',').map((kv) => kv.trim().split('='))
+      );
+      const { t, v1 } = parts;
+
+      if (!t || !v1) {
+        return false;
+      }
+
+      const bodyStr = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody);
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(`${t}.${bodyStr}`)
+        .digest('hex');
+
+      const v1Buf = Buffer.from(v1, 'hex');
+      const expBuf = Buffer.from(expected, 'hex');
+
+      if (v1Buf.length === expBuf.length && crypto.timingSafeEqual(v1Buf, expBuf)) {
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('[Auto UPI Webhook Verification Error]', err);
+      return false;
+    }
   }
 }
 

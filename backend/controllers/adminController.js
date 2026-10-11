@@ -23,7 +23,7 @@ let bannersList = [...liveBanners];
 const getAdminStats = async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
-    const totalProducts = await Product.countDocuments();
+    const totalProducts = await Product.countDocuments({ isArchived: { $ne: true } });
     const totalProjects = await ProjectKit.countDocuments();
     const totalOrders = await Order.countDocuments();
     const totalSellers = await Seller.countDocuments();
@@ -34,8 +34,9 @@ const getAdminStats = async (req, res) => {
     const pendingOrders = await Order.countDocuments({ orderStatus: { $in: ['Pending', 'Processing'] } });
     const pendingSellerApprovals = await Seller.countDocuments({ isApproved: false });
 
-    // Category Sales Breakdown from real DB
+    // Category Sales Breakdown from real DB (active products only)
     const categoryStats = await Product.aggregate([
+      { $match: { isArchived: { $ne: true } } },
       { $group: { _id: '$category', totalStock: { $sum: '$stock' }, count: { $sum: 1 } } },
     ]);
 
@@ -491,6 +492,7 @@ module.exports = {
   createBanner,
   getNotifications,
   sendNotification,
+  deleteNotification,
   getReviews,
   getPayments,
   getAuditLogs,

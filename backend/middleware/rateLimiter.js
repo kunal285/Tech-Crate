@@ -71,7 +71,7 @@ const verificationLimiter = rateLimit({
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
+  max: process.env.NODE_ENV === 'production' ? 500 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -85,9 +85,12 @@ const apiLimiter = rateLimit({
  */
 const checkoutLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 15,
+  max: process.env.NODE_ENV === 'production' ? 15 : 100,
   standardHeaders: true,
   legacyHeaders: false,
+  // Rate limiting is NEVER bypassed via client headers in production.
+  // Only skipped when server process runs under NODE_ENV=test (automated test suite).
+  skip: (req) => process.env.NODE_ENV === 'test',
   message: {
     success: false,
     message: 'Too many order requests. Please wait a few minutes before placing another order.',

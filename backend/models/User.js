@@ -29,6 +29,11 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       index: true,
     },
+    googleId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
     password: {
       type: String,
       required: false, // Optional for OTP Customers & Students; required for Admin
