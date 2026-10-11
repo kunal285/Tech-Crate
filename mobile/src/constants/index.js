@@ -11,6 +11,7 @@ const normalizeApiUrl = (url) => {
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 };
 
+// Backend URL resolution
 const getLocalBackendUrl = () => {
   // In production builds / release APK, fall back to persistent hosted backend
   if (typeof __DEV__ !== 'undefined' && !__DEV__) {

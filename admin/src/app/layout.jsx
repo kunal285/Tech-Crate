@@ -18,12 +18,20 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata = {
   title: 'Tech Crate — Admin Control Panel',
   description: 'Privileged control center for hardware e-commerce platform',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${outfit.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/logo.png" type="image/png" />
+        <link rel="shortcut icon" href="/logo.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
         <Script
           id="theme-initializer"
           strategy="beforeInteractive"
